@@ -25,7 +25,7 @@
     else {
       document.title = g.title + " · Random Games";
       document.getElementById("title").textContent = g.title;
-      frame.src = `games/${g.id}/index.html`;
+      frame.src = g.src || `games/${g.id}/index.html`;
       frame.onload = () => frame.focus();
     }
     full.onclick = () => frame.requestFullscreen();

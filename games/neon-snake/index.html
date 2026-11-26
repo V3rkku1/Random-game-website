@@ -2,63 +2,299 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neon Snake</title>
+<title>Snake</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
 <style>
-  body { margin: 0; height: 100vh; display: grid; place-items: center; background: #050510; color: #fff; font: 600 18px system-ui; touch-action: none; }
-  canvas { background: #0a0a1f; border-radius: 12px; box-shadow: 0 0 40px #00f5a055; max-width: 95vw; max-height: 80vh; }
-  #hud { text-align: center; margin-bottom: 10px; }
-  #msg { position: absolute; text-align: center; text-shadow: 0 0 12px #00f5a0; pointer-events: none; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 25%, #1d2740, #0a0e17 70%); color: #eef2ff;
+    font: 600 16px Inter, system-ui, sans-serif; touch-action: none; user-select: none; overflow: hidden;
+  }
+  #hud { display: flex; gap: 22px; align-items: center; margin-bottom: 14px; font-variant-numeric: tabular-nums; height: 32px; }
+  #hud small { color: #8b93a8; font-weight: 500; margin-right: 6px; }
+  #hud b { font-size: 20px; }
+  #cb { color: #ffd166; font-weight: 800; min-width: 48px; }
+  #cb.pop { animation: pop .35s cubic-bezier(.2, 1.8, .4, 1); }
+  #mu { background: none; border: 0; font-size: 18px; cursor: pointer; opacity: .7; }
+  #wrap { position: relative; }
+  canvas { display: block; border-radius: 18px; box-shadow: 0 30px 80px -20px #000c, 0 0 0 1px #ffffff12; }
+  #ov {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 8px; border-radius: 18px;
+    background: #0a0e17b0; backdrop-filter: blur(6px); transition: opacity .3s;
+  }
+  #ov.hide { opacity: 0; pointer-events: none; }
+  #ov > * { margin: 0; animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) backwards; }
+  #ov > :nth-child(2) { animation-delay: .06s; } #ov > :nth-child(3) { animation-delay: .12s; } #ov > :nth-child(4) { animation-delay: .18s; }
+  #ov h1 { font-size: clamp(40px, 9vw, 64px); font-weight: 800; letter-spacing: -.04em; }
+  #ov p { color: #aab3c8; font-weight: 500; }
+  #ov .best { color: #ffd166; font-weight: 700; }
+  #ov .cta { margin-top: 14px; color: #eef2ff; animation: breathe 1.6s ease-in-out infinite; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  @keyframes breathe { 50% { opacity: .45; } }
 </style>
 </head>
 <body>
-<div><div id="hud">Score: <span id="s">0</span> · Best: <span id="b">0</span></div><canvas id="c" width="400" height="400"></canvas></div>
-<div id="msg">Arrows / WASD / swipe<br>Press any key to start</div>
+<div id="hud">
+  <span><small>Score</small><b id="sc">0</b></span>
+  <span><small>Best</small><b id="bs">0</b></span>
+  <span id="cb"></span>
+  <button id="mu" aria-label="Toggle sound">🔊</button>
+</div>
+<div id="wrap"><canvas id="c"></canvas><div id="ov"></div></div>
 <script>
-const N = 20, S = 20, ctx = c.getContext("2d");
-let best = 0; try { best = +localStorage.snakeBest || 0; } catch {}
-b.textContent = best;
-let snake, dir, next, food, score, alive = false, loop;
-const place = () => { do food = { x: Math.random() * N | 0, y: Math.random() * N | 0 }; while (snake.some(p => p.x === food.x && p.y === food.y)); };
-function start() {
-  snake = [{ x: 10, y: 10 }]; dir = next = { x: 1, y: 0 }; score = 0; s.textContent = 0; alive = true; msg.style.display = "none";
-  place(); clearInterval(loop); loop = setInterval(step, 100);
+// Single file, canvas 2D + WebAudio. No engine/library needed at this size.
+const N = 20, ctx = c.getContext("2d"), board = document.createElement("canvas");
+const store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
+let S, best = +store("snakeBest") || 0, muted = store("snakeMute") === "1";
+let snake, prev, dir, queue, food, bonus, score, combo, lastEatTick, ticks, grow, step, lastTick, state = "menu";
+let particles = [], floats = [], shake = 0, pulse = 0, lastFrame = performance.now(), ac;
+
+// ---------- layout ----------
+function fit() {
+  S = Math.floor(Math.min(innerWidth * 0.94, innerHeight - 100, 640) / N);
+  const px = S * N, d = devicePixelRatio || 1;
+  c.width = c.height = board.width = board.height = px * d;
+  c.style.width = c.style.height = px + "px";
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  const b = board.getContext("2d");
+  b.setTransform(d, 0, 0, d, 0, 0);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    b.fillStyle = (x + y) % 2 ? "#151c2c" : "#192236";
+    b.fillRect(x * S, y * S, S, S);
+  }
+  const g = b.createRadialGradient(px / 2, px / 2, px * .2, px / 2, px / 2, px * .75);
+  g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.45)");
+  b.fillStyle = g; b.fillRect(0, 0, px, px);
 }
-function step() {
-  dir = next;
-  const h = { x: (snake[0].x + dir.x + N) % N, y: (snake[0].y + dir.y + N) % N };
-  if (snake.some(p => p.x === h.x && p.y === h.y)) return over();
+addEventListener("resize", fit);
+
+// ---------- game logic ----------
+function reset() {
+  snake = [{ x: 6, y: 10 }, { x: 5, y: 10 }, { x: 4, y: 10 }];
+  prev = snake.map(p => ({ ...p }));
+  dir = { x: 1, y: 0 }; queue = []; score = 0; combo = 0; lastEatTick = -99; ticks = 0; grow = 0; step = 140;
+  food = bonus = null; particles = []; floats = [];
+  food = spawn(); hud();
+}
+function spawn() {
+  const taken = [...snake, food, bonus].filter(Boolean), free = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!taken.some(p => p.x === x && p.y === y)) free.push({ x, y });
+  const p = free[Math.random() * free.length | 0];
+  if (p) p.born = performance.now();
+  return p;
+}
+function tick() {
+  ticks++;
+  prev = snake.map(p => ({ ...p }));
+  if (queue.length) dir = queue.shift();
+  const h = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  const body = grow ? snake : snake.slice(0, -1); // tail moves out of the way unless growing
+  if (h.x < 0 || h.y < 0 || h.x >= N || h.y >= N || body.some(p => p.x === h.x && p.y === h.y)) return die();
   snake.unshift(h);
-  if (h.x === food.x && h.y === food.y) { s.textContent = ++score; place(); } else snake.pop();
-  draw();
+  if (grow) grow--; else snake.pop();
+  if (food && h.x === food.x && h.y === food.y) eat();
+  if (bonus) {
+    if (h.x === bonus.x && h.y === bonus.y) eatBonus();
+    else if (--bonus.ttl <= 0) { burst(bonus.x, bonus.y, "#ffd166", 8, .5); bonus = null; }
+  }
 }
-function over() {
-  alive = false; clearInterval(loop);
-  if (score > best) { best = score; b.textContent = best; try { localStorage.snakeBest = best; } catch {} }
-  msg.innerHTML = `Game Over · ${score}<br>Press any key`; msg.style.display = "";
+function eat() {
+  combo = ticks - lastEatTick <= 30 ? combo + 1 : 1; // combo window measured in moves, so it stays fair as speed rises
+  lastEatTick = ticks;
+  score += combo; grow++; pulse = 1;
+  step = Math.max(62, step - 2.5);
+  burst(food.x, food.y, "#ff5a5f", 18);
+  floatText(food.x, food.y, combo > 1 ? `+${combo} combo` : "+1", combo > 1 ? "#ffd166" : "#fff");
+  beep(392 * Math.pow(2, Math.min(combo - 1, 12) / 6), .09);
+  food = spawn();
+  if (!bonus && Math.random() < .18) { bonus = spawn(); if (bonus) bonus.ttl = 45; }
+  hud();
 }
-function draw() {
-  ctx.fillStyle = "#0a0a1f"; ctx.fillRect(0, 0, 400, 400);
-  ctx.shadowBlur = 15;
-  ctx.shadowColor = ctx.fillStyle = "#ff2e88";
-  ctx.beginPath(); ctx.arc(food.x * S + S / 2, food.y * S + S / 2, S / 2.5, 0, 7); ctx.fill();
-  snake.forEach((p, i) => {
-    ctx.shadowColor = ctx.fillStyle = `hsl(${160 + i * 3}, 100%, ${60 - i * 0.5}%)`;
-    ctx.fillRect(p.x * S + 1, p.y * S + 1, S - 2, S - 2);
+function eatBonus() {
+  score += 5; grow += 3; pulse = 1; shake = 5;
+  burst(bonus.x, bonus.y, "#ffd166", 32, 1.5);
+  floatText(bonus.x, bonus.y, "+5", "#ffd166");
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, .1, "triangle"), i * 60));
+  bonus = null; hud();
+}
+function die() {
+  state = "dead"; shake = 16;
+  beep(220, .5, "sawtooth", .12, .25);
+  const isBest = score > best, n = snake.length;
+  if (isBest) { best = score; store("snakeBest", best); }
+  for (let i = 0; i < n; i++) setTimeout(() => { // pop segments head to tail
+    const p = snake.shift();
+    if (p) burst(p.x, p.y, color(i, n), 7, .8);
+  }, i * 28);
+  setTimeout(() => {
+    if (isBest && score) { confetti(); [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => beep(f, .12, "triangle"), i * 90)); }
+    state = "over";
+    overlay(`<p>Game over</p><h1>${score}</h1><p class="best">${isBest && score ? "New best!" : "Best " + best}</p><p class="cta">Press any key or tap to play again</p>`);
+    hud();
+  }, n * 28 + 450);
+}
+function start() {
+  ac ||= new AudioContext(); ac.resume();
+  reset(); state = "play"; lastTick = performance.now(); overlay();
+}
+function togglePause() {
+  if (state === "play") { state = "paused"; overlay(`<h1>Paused</h1><p class="cta">Press space or tap to resume</p>`); }
+  else if (state === "paused") { state = "play"; lastTick = performance.now(); overlay(); }
+}
+
+// ---------- effects ----------
+const color = (i, n) => `hsl(${(150 + score * 2 + i / n * 70) % 360}, 72%, ${62 - i / n * 16}%)`;
+function burst(x, y, c, n, sp = 1) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 7, v = (2 + Math.random() * 5) * sp;
+    particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: .07 + Math.random() * .1, c, life: 1, d: 1.4 + Math.random() });
+  }
+}
+function confetti() {
+  for (let i = 0; i < 90; i++)
+    particles.push({ x: Math.random() * N, y: -1, vx: (Math.random() - .5) * 4, vy: 4 + Math.random() * 9, r: .1 + Math.random() * .1, c: `hsl(${Math.random() * 360},90%,65%)`, life: 1, d: .5, g: 1 });
+}
+const floatText = (x, y, text, c) => floats.push({ x, y, text, c, life: 1 });
+function beep(f, dur, type = "sine", vol = .12, ratio = 1.5) {
+  if (muted || !ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = type;
+  o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * ratio, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+}
+function hud() {
+  sc.textContent = score; bs.textContent = best; mu.textContent = muted ? "🔇" : "🔊";
+  const txt = combo > 1 && state === "play" ? `x${combo}` : "";
+  if (txt !== cb.textContent) { cb.textContent = txt; cb.classList.remove("pop"); void cb.offsetWidth; cb.classList.add("pop"); }
+}
+function overlay(html) { ov.classList.toggle("hide", !html); if (html) ov.innerHTML = html; }
+
+// ---------- drawing ----------
+const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, 7); ctx.fill(); };
+const line = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+const backOut = s => s <= 0 ? 0 : s >= 1 ? 1 : 1 + 2.7 * (s - 1) ** 3 + 1.7 * (s - 1) ** 2;
+function glow(x, y, r, rgb) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${rgb},.4)`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; circle(x, y, r);
+}
+function drawFood(f, now) {
+  const x = (f.x + .5) * S, y = (f.y + .5) * S, r = S * .34 * backOut((now - f.born) / 350) * (1 + Math.sin(now / 180) * .06);
+  glow(x, y, S * 1.1, "255,90,95");
+  ctx.fillStyle = "#ff5a5f"; circle(x, y + S * .03, r);
+  ctx.fillStyle = "rgba(255,255,255,.55)"; circle(x - r * .35, y - r * .25, r * .22);
+  ctx.strokeStyle = "#8a5a3c"; ctx.lineWidth = S * .06; line(x, y - r * .7, x + r * .1, y - r * 1.15);
+  ctx.fillStyle = "#5ad17a"; ctx.beginPath(); ctx.ellipse(x + r * .4, y - r * 1.05, r * .38, r * .16, -.5, 0, 7); ctx.fill();
+}
+function drawBonus(b, now) {
+  if (b.ttl < 12 && (now / 110 | 0) % 2) return; // blink before vanishing
+  const x = (b.x + .5) * S, y = (b.y + .5) * S, R = S * .42 * backOut((now - b.born) / 400);
+  glow(x, y, S * 1.4, "255,209,102");
+  ctx.strokeStyle = "rgba(255,209,102,.7)"; ctx.lineWidth = S * .06;
+  ctx.beginPath(); ctx.arc(x, y, S * .55, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * b.ttl / 45); ctx.stroke();
+  ctx.fillStyle = "#ffd166"; ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = now / 600 + i * Math.PI / 5, r = i % 2 ? R * .45 : R;
+    ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  ctx.fill();
+}
+function drawSnake(now, t) {
+  const n = snake.length;
+  const pts = snake.map((p, i) => {
+    const q = prev[Math.min(i, prev.length - 1)] || p;
+    return { x: (q.x + (p.x - q.x) * t + .5) * S, y: (q.y + (p.y - q.y) * t + .5) * S };
   });
-  ctx.shadowBlur = 0;
+  ctx.lineCap = ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = S * .78; // drop shadow
+  ctx.beginPath(); pts.forEach((p, i) => ctx.lineTo(p.x + S * .08, p.y + S * .16)); ctx.stroke();
+  for (let i = n - 1; i > 0; i--) {
+    ctx.strokeStyle = color(i, n); ctx.lineWidth = S * (.78 - i / n * .3);
+    line(pts[i].x, pts[i].y, pts[i - 1].x, pts[i - 1].y);
+  }
+  ctx.fillStyle = "rgba(255,255,255,.14)"; // scale dots
+  for (let i = 2; i < n; i += 2) circle(pts[i].x, pts[i].y, S * (.14 - i / n * .06));
+  if (state === "dead" || !n) return;
+  const h = pts[0], d = dir, r = S * .46 * (1 + pulse * .25);
+  pulse *= .88;
+  glow(h.x, h.y, S, "120,255,200");
+  ctx.fillStyle = color(0, n); circle(h.x, h.y, r);
+  if (now % 1800 < 220) { // tongue flick
+    const tx = h.x + d.x * r * 1.7, ty = h.y + d.y * r * 1.7;
+    ctx.strokeStyle = "#ff4d6d"; ctx.lineWidth = S * .07;
+    line(h.x + d.x * r * .9, h.y + d.y * r * .9, tx, ty);
+    line(tx, ty, tx + (d.x - d.y) * S * .12, ty + (d.y + d.x) * S * .12);
+    line(tx, ty, tx + (d.x + d.y) * S * .12, ty + (d.y - d.x) * S * .12);
+  }
+  const blink = now % 3400 < 120;
+  for (const s of [-1, 1]) {
+    const ex = h.x + d.x * r * .3 - d.y * r * .5 * s, ey = h.y + d.y * r * .3 + d.x * r * .5 * s;
+    if (blink) { ctx.strokeStyle = "#0a0e17"; ctx.lineWidth = S * .06; line(ex + d.y * r * .25, ey - d.x * r * .25, ex - d.y * r * .25, ey + d.x * r * .25); continue; }
+    ctx.fillStyle = "#fff"; circle(ex, ey, r * .3);
+    ctx.fillStyle = "#0a0e17"; circle(ex + d.x * r * .12, ey + d.y * r * .12, r * .16);
+  }
 }
-const turn = (x, y) => { if (x !== -dir.x || y !== -dir.y) next = { x, y }; };
-const keys = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] };
+function draw(now, t, dt) {
+  ctx.save();
+  if (shake) { ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake); shake = shake > .3 ? shake * .88 : 0; }
+  ctx.drawImage(board, 0, 0, S * N, S * N);
+  if (food) drawFood(food, now);
+  if (bonus) drawBonus(bonus, now);
+  drawSnake(now, t);
+  particles = particles.filter(p => (p.life -= dt * p.d) > 0);
+  for (const p of particles) {
+    const f = p.g ? 1 : Math.pow(.05, dt);
+    p.vx *= f; p.vy *= f; p.x += p.vx * dt; p.y += p.vy * dt;
+    ctx.globalAlpha = p.life; ctx.fillStyle = p.c;
+    circle((p.x + .5) * S, (p.y + .5) * S, p.r * S * (p.g ? 1 : p.life + .3));
+  }
+  ctx.textAlign = "center"; ctx.font = `800 ${S * .55}px Inter, system-ui`;
+  floats = floats.filter(f => (f.life -= dt * 1.1) > 0);
+  for (const f of floats) {
+    ctx.globalAlpha = Math.min(1, f.life * 2); ctx.fillStyle = f.c;
+    ctx.fillText(f.text, Math.min(N - 2, Math.max(2, f.x + .5)) * S, (f.y + .5 - (1 - f.life) * 1.8) * S);
+  }
+  ctx.restore();
+}
+function frame(now) {
+  const dt = Math.min(.05, (now - lastFrame) / 1000); lastFrame = now;
+  if (state === "play") while (now - lastTick >= step) { lastTick += step; tick(); if (state !== "play") break; }
+  draw(now, state === "play" ? Math.min(1, (now - lastTick) / step) : 1, dt);
+  requestAnimationFrame(frame);
+}
+
+// ---------- input ----------
+const KEYS = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] };
+function turn(x, y) {
+  const last = queue[queue.length - 1] || dir; // buffer up to 3 turns so fast inputs aren't lost
+  if (queue.length > 2 || (x === last.x && y === last.y) || (x === -last.x && y === -last.y)) return;
+  queue.push({ x, y });
+}
+function toggleMute() { muted = !muted; store("snakeMute", muted ? "1" : "0"); hud(); }
 addEventListener("keydown", e => {
-  if (!alive) return start();
-  const k = keys[e.key]; if (k) { e.preventDefault(); turn(...k); }
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key, k = KEYS[key];
+  if (k || key === " ") e.preventDefault();
+  if (key === "m") return toggleMute();
+  if (state === "menu" || state === "over") return start();
+  if (key === " " || key === "p" || key === "Escape") return togglePause();
+  if (state === "play" && k) turn(...k);
 });
-let tx, ty;
-addEventListener("touchstart", e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; if (!alive) start(); });
-addEventListener("touchend", e => {
-  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
-  if (Math.abs(dx) > Math.abs(dy)) turn(Math.sign(dx), 0); else turn(0, Math.sign(dy));
-});
+let sx, sy;
+addEventListener("touchstart", e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+addEventListener("touchmove", e => {
+  const x = e.touches[0].clientX, y = e.touches[0].clientY, dx = x - sx, dy = y - sy;
+  if (state !== "play" || Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+  Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
+  sx = x; sy = y; // turn mid-swipe, then allow another
+}, { passive: true });
+ov.addEventListener("pointerdown", () => state === "paused" ? togglePause() : (state === "menu" || state === "over") && start());
+mu.onclick = toggleMute;
+addEventListener("blur", () => state === "play" && togglePause());
+
+fit(); reset();
+overlay(`<h1>Snake</h1><p>Arrows, WASD or swipe · Space to pause</p><p>⭐ Golden stars give +5 · eat fast for combos</p><p class="cta">Press any key or tap to start</p>`);
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
