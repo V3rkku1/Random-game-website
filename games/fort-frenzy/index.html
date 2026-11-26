@@ -63,8 +63,10 @@
 <div class="hud" id="res">
   <span class="pill">🪙 <b id="gold"></b> <small id="goldCap"></small></span>
   <span class="pill">🌾 <b id="food"></b> <small id="foodCap"></small></span>
+  <span class="pill">💎 <b id="crystal"></b> <small id="crystalCap"></small></span>
   <span class="pill">🔨 <b id="builders"></b></span>
   <span class="pill">🏆 <b id="troph"></b></span>
+  <span class="pill">🎖️ <b id="plv"></b> · ✨ <b id="ore"></b> · ⏳ <b id="hg"></b></span>
 </div>
 <div class="hud" id="bar"><button id="bShop">🏗️ Build</button><button id="bArmy">⚔️ Army</button><button class="go" id="bRaid">🗡️ Raid!</button></div>
 <div class="hud" id="placeBar" hidden><span class="pill" id="placeTxt"></span><button id="bCancel">Done</button></div>
@@ -79,7 +81,8 @@
 <div class="ov" id="result" hidden><div class="box" id="resultBox"></div></div>
 <div class="ov" id="welcome" hidden><div class="box">
   <h1>🏰 Fort Frenzy</h1>
-  <p>Build your fort, grow your gold and food,<br>train an army and raid enemy forts.</p>
+  <p>Build your fort, grow gold, food and crystal,<br>train an army for free and raid enemy forts.</p>
+  <p>Upgrade the Keep to unlock the Lab, Spell Shrine, Hero Altar, Forge and new defenses.<br>Raid stars earn ✨ ore for hero gear and ⏳ hourglasses that finish upgrades.</p>
   <p>Drag to move the camera · right-drag or two fingers to rotate · scroll/pinch to zoom.</p>
   <p>Tap buildings to upgrade them · tap 🪙 / 🌾 bubbles to collect.</p>
   <div class="row" style="justify-content:center"><button class="go" id="bStart">Let's build</button></div>
@@ -93,24 +96,40 @@ const N = 24, V3 = THREE.Vector3, $ = id => document.getElementById(id), now = (
 const store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
 
 // ---------- data ----------
+const RI = { gold: "🪙", food: "🌾", crystal: "💎" }, RC = { gold: 0xffcc33, food: 0xe8c55a, crystal: 0xb36bff };
+// cur = currency (default gold); array length = max level; a building's level may not pass the Keep's
 const B = {
-  keep: { name: "Keep", icon: "🏰", size: 3, hp: [1600, 2600, 4000], cost: [0, 1500, 5000], time: [0, 40, 120], store: [1500, 3000, 6000], h: 4 },
-  mine: { name: "Gold Mine", icon: "⛏️", size: 2, hp: [400, 600, 900], cost: [120, 400, 1200], time: [5, 20, 60], prod: [1.2, 2.4, 4], cap: [300, 600, 1200], res: "gold", h: 2 },
-  farm: { name: "Farm", icon: "🌾", size: 2, hp: [400, 600, 900], cost: [100, 350, 1000], time: [5, 20, 60], prod: [1, 2, 3.5], cap: [300, 600, 1200], res: "food", h: 1.6 },
-  vault: { name: "Vault", icon: "💰", size: 2, hp: [600, 900, 1400], cost: [300, 900, 2500], time: [10, 30, 80], store: [1500, 3000, 6000], h: 2 },
-  cannon: { name: "Cannon", icon: "💣", size: 2, hp: [500, 750, 1100], cost: [250, 800, 2200], time: [8, 25, 70], dmg: [24, 38, 60], range: 6.5, rate: 1.3, ground: true, h: 1.8 },
-  tower: { name: "Archer Tower", icon: "🏹", size: 2, hp: [450, 700, 1000], cost: [300, 900, 2400], time: [8, 25, 70], dmg: [11, 17, 26], range: 8, rate: .6, h: 3.6 },
-  barracks: { name: "Barracks", icon: "⛺", size: 3, hp: [500, 750, 1000], cost: [200, 900, 2500], time: [5, 30, 90], army: [12, 22, 34], h: 2.6 },
-  wall: { name: "Wall", icon: "🧱", size: 1, hp: [350, 700, 1200], cost: [15, 60, 180], time: [0, 2, 6], h: 1.2 },
+  keep: { name: "Keep", icon: "🏰", size: 3, hp: [1600, 2600, 4000, 5600, 7500], cost: [0, 1500, 5000, 12000, 25000], time: [0, 40, 120, 240, 420], store: [1500, 3000, 6000, 12000, 24000], h: 4 },
+  mine: { name: "Gold Mine", icon: "⛏️", size: 2, hp: [400, 600, 900, 1250, 1650], cost: [120, 400, 1200, 3000, 6500], time: [5, 20, 60, 120, 200], prod: [1.2, 2.4, 4, 6, 8.5], cap: [300, 600, 1200, 2400, 4000], res: "gold", h: 2 },
+  farm: { name: "Farm", icon: "🌾", size: 2, hp: [400, 600, 900, 1250, 1650], cost: [100, 350, 1000, 2600, 5800], time: [5, 20, 60, 120, 200], prod: [1, 2, 3.5, 5.5, 8], cap: [300, 600, 1200, 2400, 4000], res: "food", h: 1.6 },
+  drill: { name: "Crystal Drill", icon: "💎", size: 2, hp: [450, 650, 900], cost: [2000, 5000, 10000], cur: "food", time: [30, 90, 180], prod: [.25, .45, .7], cap: [100, 200, 350], res: "crystal", h: 2.4 },
+  vault: { name: "Vault", icon: "💰", size: 2, hp: [600, 900, 1400, 2000, 2700], cost: [300, 900, 2500, 6000, 12000], time: [10, 30, 80, 150, 240], store: [1500, 3000, 6000, 10000, 15000], h: 2 },
+  hut: { name: "Builder Hut", icon: "🛖", size: 2, hp: [300], cost: [1000], time: [0], h: 1.6 },
+  barracks: { name: "Barracks", icon: "⛺", size: 3, hp: [500, 750, 1000, 1300, 1650], cost: [200, 900, 2500, 6000, 12000], cur: "food", time: [5, 30, 90, 160, 240], army: [12, 22, 34, 45, 60], h: 2.6 },
+  lab: { name: "Laboratory", icon: "🧪", size: 2, hp: [500, 750, 1050, 1400, 1800], cost: [300, 1200, 3500, 8000, 15000], cur: "food", time: [10, 40, 100, 180, 280], h: 2.4 },
+  shrine: { name: "Spell Shrine", icon: "🔮", size: 2, hp: [450, 700, 1000], cost: [1500, 4000, 9000], cur: "food", time: [20, 60, 140], spells: [2, 3, 4], h: 2.2 },
+  altar: { name: "Hero Altar", icon: "👑", size: 2, hp: [800, 1100, 1500], cost: [100, 300, 700], cur: "crystal", time: [30, 90, 180], h: 1.6 },
+  forge: { name: "Forge", icon: "⚒️", size: 2, hp: [700], cost: [3000], time: [60], h: 2 },
+  cannon: { name: "Cannon", icon: "💣", size: 2, hp: [500, 750, 1100, 1500, 2000], cost: [250, 800, 2200, 5000, 10000], time: [8, 25, 70, 140, 220], dmg: [24, 38, 60, 85, 115], range: 6.5, rate: 1.3, ground: true, h: 1.8 },
+  tower: { name: "Archer Tower", icon: "🏹", size: 2, hp: [450, 700, 1000, 1400, 1850], cost: [300, 900, 2400, 5500, 11000], time: [8, 25, 70, 140, 220], dmg: [11, 17, 26, 37, 50], range: 8, rate: .6, h: 3.6 },
+  catapult: { name: "Catapult", icon: "☄️", size: 2, hp: [550, 800, 1150, 1550, 2000], cost: [400, 1100, 2800, 6200, 12000], time: [10, 30, 80, 150, 230], dmg: [30, 45, 65, 90, 120], range: 9, min: 2.5, rate: 3, splash: 1.4, ground: true, h: 1.8 },
+  ballista: { name: "Sky Ballista", icon: "🎯", size: 2, hp: [500, 750, 1050, 1400, 1800], cost: [500, 1300, 3200, 7000, 13000], time: [10, 30, 80, 150, 230], dmg: [60, 90, 130, 175, 230], range: 8.5, rate: 1.6, air: true, h: 2.8 },
+  trap: { name: "Spike Trap", icon: "🪤", size: 1, hp: [1, 1, 1, 1, 1], cost: [60, 200, 600, 1500, 3000], time: [0, 5, 15, 30, 50], dmg: [120, 180, 260, 360, 480], trap: true, h: .3 },
+  wall: { name: "Wall", icon: "🧱", size: 1, hp: [350, 700, 1200, 2000, 3200], cost: [15, 60, 180, 450, 1000], time: [0, 2, 6, 12, 20], h: 1.2 },
 };
-const LIMIT = { keep: [1, 1, 1], mine: [2, 3, 4], farm: [2, 3, 4], vault: [1, 2, 2], cannon: [1, 2, 3], tower: [1, 2, 3], barracks: [1, 1, 1], wall: [16, 32, 48] };
+const LIMIT = { keep: [1, 1, 1, 1, 1], mine: [2, 3, 4, 5, 6], farm: [2, 3, 4, 5, 6], drill: [0, 0, 1, 2, 2], vault: [1, 2, 2, 3, 3], hut: [0, 1, 1, 2, 3], barracks: [1, 1, 1, 1, 1], lab: [0, 1, 1, 1, 1], shrine: [0, 0, 1, 1, 1], altar: [0, 0, 1, 1, 1], forge: [0, 0, 1, 1, 1],
+  cannon: [1, 2, 3, 3, 4], tower: [1, 2, 3, 3, 4], catapult: [0, 1, 1, 2, 2], ballista: [0, 0, 1, 1, 2], trap: [2, 3, 4, 5, 6], wall: [16, 32, 48, 64, 80] };
+// training is free; unlock = Barracks lv (troops) or Shrine lv (spells); Lab research adds +20% hp/dmg per level
 const T = {
-  shield: { name: "Shield Bearer", icon: "🛡️", cost: 25, space: 2, hp: 320, dmg: 14, rate: 1, range: .7, speed: 1.3, unlock: 1 },
-  slinger: { name: "Slinger", icon: "🪨", cost: 15, space: 1, hp: 90, dmg: 9, rate: .8, range: 3.5, speed: 1.7, unlock: 1 },
-  goat: { name: "Ram Goat", icon: "🐐", cost: 60, space: 4, hp: 450, dmg: 45, rate: 1.4, range: .7, speed: 2.3, unlock: 2, prefers: "def" },
-  bird: { name: "Firebird", icon: "🔥", cost: 120, space: 5, hp: 380, dmg: 32, rate: 1.2, range: 2, speed: 1.9, unlock: 3, air: true },
+  shield: { name: "Shield Bearer", icon: "🛡️", space: 2, hp: 320, dmg: 14, rate: 1, range: .7, speed: 1.3, unlock: 1 },
+  slinger: { name: "Slinger", icon: "🪨", space: 1, hp: 90, dmg: 9, rate: .8, range: 3.5, speed: 1.7, unlock: 1 },
+  goat: { name: "Ram Goat", icon: "🐐", space: 4, hp: 450, dmg: 45, rate: 1.4, range: .7, speed: 2.3, unlock: 2, prefers: "def" },
+  bird: { name: "Firebird", icon: "🔥", space: 5, hp: 380, dmg: 32, rate: 1.2, range: 2, speed: 1.9, unlock: 3, air: true },
+  bolt: { name: "Lightning", icon: "⚡", space: 1, dmg: 220, radius: 1.6, spell: true, unlock: 1 },
+  heal: { name: "Heal", icon: "💚", space: 1, dmg: 180, radius: 2.5, spell: true, unlock: 2 },
+  hero: { name: "Warlord", icon: "👑", hp: 1100, dmg: 45, rate: 1, range: .8, speed: 1.6, hero: true },
 };
-const BUILDERS = 2;
+const EQ = { aegis: { name: "Iron Aegis", icon: "🛡️", stat: "hp", per: .12 }, blade: { name: "Fury Blade", icon: "🗡️", stat: "dmg", per: .12 }, boots: { name: "Swift Boots", icon: "👢", stat: "speed", per: .06 } };
 
 // ---------- save state ----------
 const fresh = () => ({ gold: 600, food: 400, trophies: 0, raids: 0, army: {}, queue: [], b: [
@@ -119,13 +138,26 @@ const fresh = () => ({ gold: 600, food: 400, trophies: 0, raids: 0, army: {}, qu
 ] });
 let S; try { S = JSON.parse(store("fortSave")); } catch {}
 const firstRun = !S; S ||= fresh();
+S = { crystal: 0, xp: 0, ore: 0, hg: 1, lab: {}, eq: {}, on: [], rs: null, ...S }; // fields added after v1 saves; hg = ⏳ hourglasses, rs = running research
 const save = () => store("fortSave", JSON.stringify({ ...S, b: S.b.map(({ t, x, y, lv, up, stored, last }) => ({ t, x, y, lv, up, stored, last })) })); // explicit fields: mesh refs must not be serialised
 const keep = () => S.b.find(b => b.t === "keep");
-const caps = () => { const base = B.keep.store[keep().lv - 1] + S.b.filter(b => b.t === "vault" && b.lv).reduce((s, b) => s + B.vault.store[b.lv - 1], 0); return { gold: base, food: base }; };
+const caps = () => { const kl = keep().lv, base = B.keep.store[kl - 1] + S.b.filter(b => b.t === "vault" && b.lv).reduce((s, b) => s + B.vault.store[b.lv - 1], 0); return { gold: base, food: base, crystal: 200 * kl }; };
 const busyCount = () => S.b.filter(b => b.up > now()).length;
-const armyCap = () => { const b = S.b.find(b => b.t === "barracks" && b.lv); return b ? B.barracks.army[b.lv - 1] : 0; };
-const barracksLv = () => Math.max(0, ...S.b.filter(b => b.t === "barracks").map(b => b.lv));
-const armySpace = () => Object.entries(S.army).reduce((s, [k, n]) => s + T[k].space * n, 0) + S.queue.reduce((s, q) => s + T[q.t].space, 0);
+const builders = () => 2 + S.b.filter(b => b.t === "hut" && b.lv).length;
+const lvOf = t => Math.max(0, ...S.b.filter(b => b.t === t).map(b => b.lv));
+const armyCap = () => B.barracks.army[lvOf("barracks") - 1] || 0;
+const spellCap = () => B.shrine.spells[lvOf("shrine") - 1] || 0;
+const armySpace = spell => Object.entries(S.army).reduce((s, [k, n]) => s + (!!T[k].spell === spell ? T[k].space * n : 0), 0) + S.queue.reduce((s, q) => s + (!!T[q.t].spell === spell ? T[q.t].space : 0), 0);
+const tlv = k => S.lab[k] || 1, boost = k => 1 + .2 * (tlv(k) - 1);
+const heroReady = () => S.b.some(b => b.t === "altar" && b.lv && !(b.up > now()));
+function heroStats() {
+  const m = 1.3 ** (lvOf("altar") - 1), u = T.hero, s = { hp: u.hp * m, dmg: u.dmg * m, speed: u.speed };
+  if (lvOf("forge")) for (const e of S.on) s[EQ[e].stat] *= 1 + EQ[e].per * (S.eq[e] || 1);
+  return s;
+}
+const plv = () => Math.min(500, 1 + Math.floor(Math.sqrt(S.xp / 20)));
+function xp(n) { const l = plv(); S.xp += n; if (plv() > l) { S.hg++; setTimeout(() => toast(`🎖️ Player level ${plv()} · +1 ⏳`), 900); } }
+const setHTML = (el, h) => el._h !== h && (el.innerHTML = el._h = h); // skip identical re-renders so taps aren't eaten mid-click
 const fmt = n => n >= 10000 ? (n / 1000).toFixed(1) + "k" : Math.floor(n);
 
 // ---------- three.js scene ----------
@@ -184,7 +216,7 @@ forbidMesh.rotation.x = -Math.PI / 2; forbidMesh.position.y = .015; forbidMesh.v
 
 // ---------- models ----------
 function model(t, lv, team) {
-  const g = new THREE.Group(), L = Math.max(1, lv), flag = team ? 0xe8453c : 0x3c7be8, trim = [0xb87333, 0xd0d6de, 0xffc93c][L - 1];
+  const g = new THREE.Group(), L = Math.max(1, lv), flag = team ? 0xe8453c : 0x3c7be8, trim = [0xb87333, 0xd0d6de, 0xffc93c, 0x7fd6ff, 0xb36bff][L - 1];
   const add = (geo, c, x, y, z, p = g) => { const m = new THREE.Mesh(geo, mat(c)); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; p.add(m); return m; };
   if (t === "keep") {
     const h = 1.4 + L * .3;
@@ -203,7 +235,7 @@ function model(t, lv, team) {
     add(cyl(.06, .06, 1.2, 6), 0x7a5230, .7, 1.1, .7); add(cyl(.06, .06, 1.2, 6), 0x7a5230, -.7, 1.1, .7); add(box(1.5, .1, .1), 0x7a5230, 0, 1.7, .7);
   } else if (t === "farm") {
     add(box(1.85, .2, 1.85), 0x8b5a2b, 0, .1, 0);
-    for (let i = 0; i < 4; i++) add(box(1.55, .1 + L * .1, .2), [0x7cc243, 0x8fd14f, 0xc9d84a][L - 1], 0, .2 + (.1 + L * .1) / 2, -.6 + i * .4);
+    for (let i = 0; i < 4; i++) add(box(1.55, .1 + L * .1, .2), [0x7cc243, 0x8fd14f, 0xc9d84a, 0xe0c048, 0xf0a838][L - 1], 0, .2 + (.1 + L * .1) / 2, -.6 + i * .4);
     add(cyl(.25, .32, .4, 10), 0xe8c55a, .72, .4, .72);
     for (const [x, z] of [[-.9, -.9], [.9, -.9], [-.9, .9]]) add(cyl(.05, .05, .4, 6), trim, x, .3, z);
   } else if (t === "vault") {
@@ -233,8 +265,43 @@ function model(t, lv, team) {
     add(box(.08, .9, .08), 0x7a5230, 1.15, .6, -.9); add(box(.08, .9, .08), 0x7a5230, -1.15, .6, -.9);
   } else if (t === "wall") {
     const h = .7 + L * .15;
-    add(box(.92, h, .92), [0xa39a8b, 0x8e93a3, 0xd6b14a][L - 1], 0, h / 2, 0);
-    add(box(.98, .12, .98), [0x8c8475, 0x777c8c, 0xb8962e][L - 1], 0, h, 0);
+    add(box(.92, h, .92), [0xa39a8b, 0x8e93a3, 0xd6b14a, 0x5a6a8a, 0x3a2f4a][L - 1], 0, h / 2, 0);
+    add(box(.98, .12, .98), [0x8c8475, 0x777c8c, 0xb8962e, 0x46546e, 0x2a2236][L - 1], 0, h, 0);
+  } else if (t === "hut") {
+    add(box(1.3, .9, 1.3), 0x9b6b3d, 0, .45, 0); add(cone(1.15, .8, 4), 0x6b4a2b, 0, 1.3, 0).rotation.y = Math.PI / 4;
+    add(box(.4, .55, .06), 0x3a2a1a, 0, .3, .66); add(box(.08, .5, .08), 0xd0d6de, .8, .25, .5);
+  } else if (t === "lab") {
+    add(box(1.6, 1.1, 1.6), 0xd8dde6, 0, .55, 0); add(box(1.66, .1, 1.66), trim, 0, 1.1, 0);
+    add(cyl(.2, .42, .6, 10), 0x6be0c8, 0, 1.45, 0).material = mat(0x6be0c8, 1); add(cyl(.1, .1, .3, 8), 0xd8dde6, 0, 1.9, 0);
+    add(box(.4, .55, .06), 0x3a4a5a, 0, .3, .81);
+  } else if (t === "shrine") {
+    add(box(1.6, .3, 1.6), 0x8f8676, 0, .15, 0);
+    for (const [x, z] of [[-.6, -.6], [.6, -.6], [-.6, .6], [.6, .6]]) add(cyl(.1, .12, 1.3, 6), 0xd4c7ac, x, .95, z);
+    add(box(1.5, .12, 1.5), trim, 0, 1.66, 0); add(octa(.32), 0xb36bff, 0, 1.05, 0).material = mat(0xb36bff, 1);
+  } else if (t === "drill") {
+    add(box(1.7, .35, 1.7), 0x5a5a6a, 0, .17, 0);
+    for (const [x, z] of [[-.5, -.5], [.5, -.5], [0, .55]]) add(cyl(.05, .07, 2, 6), 0x6b4a2b, x * .5, 1.2, z * .5).rotation.set(z * .3, 0, -x * .3);
+    add(cyl(.08, .08, 1.6, 6), 0x444444, 0, 1, 0);
+    [[.55, .5, .45], [-.5, .5, .5], [.5, .5, -.5], [-.45, .5, -.5]].slice(0, L + 1).forEach(([x, y, z]) => add(octa(.17), 0xb36bff, x, y, z).material = mat(0xb36bff, 1));
+  } else if (t === "altar") {
+    add(box(1.8, .3, 1.8), 0x8f8676, 0, .15, 0); add(box(1.3, .3, 1.3), 0xa39a8b, 0, .45, 0); add(box(.8, .5, .8), trim, 0, .85, 0);
+    add(cyl(.32, .26, .3, 6), 0xffc93c, 0, 1.25, 0).material = mat(0xffc93c, 1);
+  } else if (t === "forge") {
+    add(box(1.6, 1, 1.6), 0x5a5048, 0, .5, 0); add(box(.4, 1.1, .4), 0x4a423c, -.5, 1.4, -.5);
+    add(box(.7, .3, .06), 0xff7a1a, 0, .4, .81).material = mat(0xff7a1a, 1); add(box(.5, .25, .3), 0x2e2e2e, .5, 1.12, .4);
+  } else if (t === "catapult") {
+    add(cyl(.8, .9, .3, 8), 0x8b5a2b, 0, .15, 0);
+    const tur = new THREE.Group(); tur.position.y = .45; g.add(tur); g.userData.turret = tur;
+    add(box(.9, .3, .9), 0x9b6b3d, 0, 0, 0, tur); add(box(.12, .12, 1.4), 0x6b4a2b, 0, .45, -.1, tur).rotation.x = -.5;
+    add(box(.35, .15, .35), trim, 0, .78, .5, tur); add(dode(.14), 0x8a8276, 0, .9, .5, tur);
+  } else if (t === "ballista") {
+    for (const [x, z] of [[-.55, -.55], [.55, -.55], [-.55, .55], [.55, .55]]) add(box(.18, 2, .18), 0x8f8676, x, 1, z);
+    add(box(1.4, .15, 1.4), trim, 0, 2, 0);
+    const tur = new THREE.Group(); tur.position.y = 2.25; g.add(tur); g.userData.turret = tur;
+    add(box(1.3, .08, .1), 0x6b4a2b, 0, 0, .2, tur); add(box(.1, .1, 1.1), 0x9b6b3d, 0, 0, 0, tur); add(box(.05, .05, .7), 0xd0d6de, 0, .07, .3, tur);
+  } else if (t === "trap") {
+    add(box(.8, .06, .8), 0x5a5048, 0, .03, 0);
+    for (const [x, z] of [[-.2, -.2], [.2, -.2], [-.2, .2], [.2, .2]]) add(cone(.08, .25, 4), trim, x, .18, z);
   }
   return g;
 }
@@ -258,7 +325,8 @@ function troopModel(k) {
     for (const s of [-1, 1]) { const w = add(box(.6, .04, .3), 0xff4d1a, s * .38, .05, 0, 1); w.userData.wing = s; }
     g.position.y = 2.4;
   }
-  g.scale.setScalar(1.1);
+  if (k === "hero") { add(cyl(.2, .26, .55, 8), 0x8a2be2, 0, .32, 0); add(sph(.16), 0xf2c9a0, 0, .74, 0); add(cyl(.17, .14, .14, 6), 0xffc93c, 0, .92, 0, 1); add(box(.05, .05, .6), 0xd0d6de, .26, .45, .2); add(box(.5, .5, .04), 0xb8392e, 0, .4, -.22); }
+  g.scale.setScalar(k === "hero" ? 1.5 : 1.1);
   return g;
 }
 const center = b => [b.x + B[b.t].size / 2 - N / 2, b.y + B[b.t].size / 2 - N / 2];
@@ -332,10 +400,10 @@ function produce(b, t) {
 }
 function collect(b) {
   const d = B[b.t], cap = caps()[d.res], take = Math.floor(Math.min(b.stored || 0, cap - S[d.res]));
-  if (take <= 0) return toast(`${d.res === "gold" ? "Gold" : "Food"} storage full · build or upgrade a Vault`);
+  if (take <= 0) return toast(`${RI[d.res]} storage full · upgrade your Keep or a Vault`);
   S[d.res] += take; b.stored -= take;
-  const [x, z] = center(b); floatText(x, 2.2, z, `+${take} ${d.res === "gold" ? "🪙" : "🌾"}`);
-  burst(x, 1.2, z, d.res === "gold" ? 0xffcc33 : 0xe8c55a, 8, 2.5); beep(880, .08); beep(1320, .1);
+  const [x, z] = center(b); floatText(x, 2.2, z, `+${take} ${RI[d.res]}`);
+  burst(x, 1.2, z, RC[d.res], 8, 2.5); beep(880, .08); beep(1320, .1);
   if (b._m) bounce(b._m);
   hud(); save();
 }
@@ -343,18 +411,19 @@ function villageTick() {
   const t = now();
   for (const b of S.b) {
     if (b.up && b.up <= t) {
-      b.up = 0; b.lv++;
+      b.up = 0; b.lv++; xp(5 + Math.ceil(B[b.t].cost[b.lv - 1] / 50));
       if (mode !== "raid") { refreshMesh(b); const [x, z] = center(b); burst(x, .5, z, 0xd8c8a8, 18, 3); bounce(b._m); beep(660, .12); beep(990, .15); toast(`${B[b.t].name} ready · level ${b.lv}`); }
       save();
     }
     produce(b, t);
   }
+  if (S.rs && S.rs.end <= t) { const k = S.rs.k; S.lab[k] = tlv(k) + 1; S.rs = null; xp(10); toast(`🧪 ${T[k].name} researched · level ${S.lab[k]}`); beep(784, .15); save(); }
   while (S.queue.length && S.queue[0].end <= t) { const q = S.queue.shift(); S.army[q.t] = (S.army[q.t] || 0) + 1; save(); }
   hud();
   if (mode === "village" || mode === "place") {
     for (const b of S.b) {
-      const d = B[b.t], busy = b.up > t, ready = d.prod && (b.stored || 0) >= Math.max(10, d.cap[b.lv - 1] * .1);
-      const html = busy ? `🔨 ${Math.ceil((b.up - t) / 1000)}s` : ready ? (d.res === "gold" ? "🪙" : "🌾") : "";
+      const d = B[b.t], busy = b.up > t, ready = d.prod && (b.stored || 0) >= Math.max(5, d.cap[b.lv - 1] * .1);
+      const html = busy ? `🔨 ${Math.ceil((b.up - t) / 1000)}s` : ready ? RI[d.res] : "";
       if (!html) { b._lab?.remove(); delete b._lab; continue; }
       if (!b._lab) { b._lab = label(busy ? "timer" : "bubble"); b._lab.onclick = () => collect(b); }
       b._lab.className = "lab " + (busy ? "timer" : "bubble");
@@ -366,10 +435,10 @@ function villageTick() {
 }
 function hud() {
   const c = caps();
-  $("gold").textContent = fmt(S.gold); $("goldCap").textContent = "/ " + fmt(c.gold);
-  $("food").textContent = fmt(S.food); $("foodCap").textContent = "/ " + fmt(c.food);
-  $("builders").textContent = `${BUILDERS - busyCount()}/${BUILDERS}`; $("troph").textContent = S.trophies;
-  $("bRaid").disabled = !Object.values(S.army).some(n => n > 0);
+  for (const r of ["gold", "food", "crystal"]) { $(r).textContent = fmt(S[r]); $(r + "Cap").textContent = "/ " + fmt(c[r]); }
+  $("builders").textContent = `${builders() - busyCount()}/${builders()}`; $("troph").textContent = S.trophies;
+  $("plv").textContent = plv(); $("ore").textContent = S.ore; $("hg").textContent = S.hg;
+  $("bRaid").disabled = !Object.entries(S.army).some(([k, n]) => n > 0 && !T[k].spell) && !heroReady();
 }
 
 // ---------- panels ----------
@@ -378,57 +447,89 @@ function showShop() {
   const kl = keep().lv;
   $("shop").innerHTML = `<h3>🏗️ Build <button onclick="closeSheets()">✕</button></h3><div class="cards">` +
     Object.entries(B).filter(([t]) => t !== "keep").map(([t, d]) => {
-      const n = S.b.filter(b => b.t === t).length, lim = LIMIT[t][kl - 1];
-      const off = n >= lim || S.gold < d.cost[0] || (d.time[0] && busyCount() >= BUILDERS);
-      return `<div class="card ${off ? "off" : ""}" data-t="${t}"><span class="i">${d.icon}</span><b>${d.name}</b><small>🪙 ${d.cost[0]} · ${n}/${lim}</small></div>`;
-    }).join("") + `</div><p>Upgrade your Keep to build more.</p>`;
+      const n = S.b.filter(b => b.t === t).length, lim = LIMIT[t][kl - 1], cur = d.cur || "gold";
+      const off = n >= lim || S[cur] < d.cost[0] || (d.time[0] && busyCount() >= builders());
+      return `<div class="card ${off ? "off" : ""}" data-t="${t}"><span class="i">${d.icon}</span><b>${d.name}</b><small>${lim ? `${RI[cur]} ${d.cost[0]} · ${n}/${lim}` : `🔒 Keep lv ${LIMIT[t].findIndex(v => v) + 1}`}</small></div>`;
+    }).join("") + `</div><p>Tip: Keep & offense first (Barracks, Lab, Hero), then storages and defenses, walls last.</p>`;
   $("shop").hidden = false;
 }
 $("shop").onclick = e => { const c = e.target.closest(".card:not(.off)"); if (c) startPlace(c.dataset.t); };
 function showInfo(b) {
   sel = b;
-  const d = B[b.t], t = now(), busy = b.up > t, lv = b.lv, next = lv + 1, max = d.cost.length, kl = keep().lv;
-  const stats = [`❤️ ${d.hp[Math.max(0, lv - 1)]}`];
-  if (d.prod && lv) stats.push(`${d.res === "gold" ? "🪙" : "🌾"} ${d.prod[lv - 1]}/s · holds ${d.cap[lv - 1]} · has ${Math.floor(b.stored || 0)}`);
-  if (d.dmg && lv) stats.push(`💥 ${d.dmg[lv - 1]} dmg · range ${d.range}${d.ground ? " · ground only" : " · hits air"}`);
-  if (d.store && lv) stats.push(`📦 stores ${d.store[lv - 1]} of each`);
-  if (d.army && lv) stats.push(`👥 army size ${d.army[lv - 1]} · unlocks ${Object.values(T).filter(u => u.unlock <= lv).map(u => u.icon).join(" ")}`);
+  const d = B[b.t], t = now(), busy = b.up > t, lv = b.lv, next = lv + 1, max = d.cost.length, kl = keep().lv, cur = d.cur || "gold";
+  const stats = [`❤️ ${d.hp[Math.max(0, lv - 1)]}`], icons = f => Object.values(T).filter(f).map(u => u.icon).join(" ");
+  let extra = "";
+  if (d.prod && lv) stats.push(`${RI[d.res]} ${d.prod[lv - 1]}/s · holds ${d.cap[lv - 1]} · has ${Math.floor(b.stored || 0)}`);
+  if (d.dmg && lv) stats.push(`💥 ${d.dmg[lv - 1]} dmg${d.trap ? " · hidden, hits ground troops nearby" : ` · range ${d.range}${d.ground ? " · ground only" : d.air ? " · air only" : " · hits air"}${d.splash ? " · splash" : ""}`}`);
+  if (d.store && lv) stats.push(`📦 stores ${d.store[lv - 1]} 🪙 & 🌾${b.t === "keep" ? ` · ${200 * lv} 💎` : ""}`);
+  if (d.army && lv) stats.push(`👥 army size ${d.army[lv - 1]} · unlocks ${icons(u => !u.spell && !u.hero && u.unlock <= lv)}`);
+  if (d.spells && lv) stats.push(`🔮 ${d.spells[lv - 1]} spell slots · unlocks ${icons(u => u.spell && u.unlock <= lv)}`);
+  if (b.t === "hut" && lv) stats.push("🔨 +1 builder");
+  if (b.t === "altar" && lv) { const h = heroStats(); stats.push(`👑 Warlord lv ${lv} · ❤️ ${h.hp | 0} · 💥 ${h.dmg | 0}${busy ? " · resting while upgrading" : ""}`); }
+  if (b.t === "lab" && lv) {
+    const top = Math.min(5, lv + 1);
+    extra = `<p>🔬 ${S.rs ? `Researching ${T[S.rs.k].icon} · ${Math.ceil((S.rs.end - t) / 1000)}s` : "Research a unit with 🌾 food (+20% per level)"}</p>` +
+      (S.rs && S.hg ? `<div class="row"><button id="bHgR">⏳ Finish research (${S.hg})</button></div>` : "") + `<div class="cards">` +
+      Object.entries(T).filter(([, u]) => !u.hero).map(([k, u]) => {
+        const l = tlv(k), c = 150 * l * l, off = S.rs || l >= top || S.food < c;
+        return `<div class="card ${off ? "off" : ""}" data-r="${k}"><span class="i">${u.icon}</span><b>${u.name} ${l}</b><small>${l >= top ? "Max for this Lab" : `🌾 ${c} · ${15 * l}s`}</small></div>`;
+      }).join("") + `</div>`;
+  }
+  if (b.t === "forge" && lv) {
+    extra = `<p>✨ ${S.ore} ore · upgrades are instant · Warlord wears 2</p><div class="cards">` +
+      Object.entries(EQ).map(([k, q]) => {
+        const l = S.eq[k] || 1, c = 8 * l, off = l >= 5 || S.ore < c;
+        return `<div class="card ${off ? "off" : ""}" data-eq="${k}"><span class="i">${q.icon}</span><b>${q.name} ${l}</b><small>+${Math.round(q.per * l * 100)}% ${q.stat}</small><small>${l >= 5 ? "Max" : `✨ ${c}`}</small></div>`;
+      }).join("") + `</div><div class="row">${Object.entries(EQ).map(([k, q]) => `<button data-on="${k}">${S.on.includes(k) ? "✅" : "⬜"} ${q.icon} ${q.name}</button>`).join("")}</div>`;
+  }
   let up;
-  if (busy) up = `<button disabled>🔨 ${lv ? "Upgrading" : "Building"}… ${Math.ceil((b.up - t) / 1000)}s</button>`;
+  if (busy) up = `<button disabled>🔨 ${lv ? "Upgrading" : "Building"}… ${Math.ceil((b.up - t) / 1000)}s</button>${S.hg ? `<button id="bHg">⏳ Finish now (${S.hg})</button>` : ""}`;
   else if (next > max) up = `<button disabled>Max level</button>`;
   else {
-    const why = b.t !== "keep" && next > kl ? `Needs Keep lv ${next}` : S.gold < d.cost[next - 1] ? "Not enough gold" : busyCount() >= BUILDERS ? "No free builder" : "";
-    up = `<button class="go" id="bUp" ${why ? "disabled" : ""}>⬆️ Level ${next} · 🪙 ${d.cost[next - 1]} · ${d.time[next - 1]}s</button>${why ? `<p>${why}</p>` : ""}`;
+    const why = b.t !== "keep" && next > kl ? `Needs Keep lv ${next}` : S[cur] < d.cost[next - 1] ? `Not enough ${RI[cur]}` : busyCount() >= builders() ? "No free builder" : "";
+    up = `<button class="go" id="bUp" ${why ? "disabled" : ""}>⬆️ Level ${next} · ${RI[cur]} ${d.cost[next - 1]} · ${d.time[next - 1]}s</button>${why ? `<p>${why}</p>` : ""}`;
   }
-  $("info").innerHTML = `<h3>${d.icon} ${d.name} · Lv ${lv || "–"} <button onclick="closeSheets()">✕</button></h3><p>${stats.join("<br>")}</p>
-    <div class="row">${up}${d.prod && lv ? `<button id="bCol">Collect</button>` : ""}<button id="bMove">✥ Move</button></div>`;
+  setHTML($("info"), `<h3>${d.icon} ${d.name} · Lv ${lv || "–"} <button onclick="closeSheets()">✕</button></h3><p>${stats.join("<br>")}</p>
+    <div class="row">${up}${d.prod && lv ? `<button id="bCol">Collect</button>` : ""}<button id="bMove">✥ Move</button></div>${extra}`);
   $("info").hidden = false;
   $("bUp") && ($("bUp").onclick = () => upgrade(b));
   $("bCol") && ($("bCol").onclick = () => collect(b));
+  $("bHg") && ($("bHg").onclick = () => { S.hg--; b.up = now(); villageTick(); });
+  $("bHgR") && ($("bHgR").onclick = () => { S.hg--; S.rs.end = now(); villageTick(); });
   $("bMove").onclick = () => startPlace(b.t, b);
 }
+$("info").addEventListener("click", e => {
+  const on = e.target.closest("[data-on]")?.dataset.on, c = e.target.closest(".card:not(.off)");
+  if (on) { if (S.on.includes(on)) S.on = S.on.filter(x => x !== on); else if (S.on.length < 2) S.on.push(on); else return toast("Only 2 slots · unequip one first"); }
+  else if (c?.dataset.r) { const k = c.dataset.r, l = tlv(k); S.food -= 150 * l * l; S.rs = { k, end: now() + 15000 * l }; }
+  else if (c?.dataset.eq) { const k = c.dataset.eq, l = S.eq[k] || 1; S.ore -= 8 * l; S.eq[k] = l + 1; toast(`${EQ[k].icon} ${EQ[k].name} level ${l + 1}`); }
+  else return;
+  beep(520); save(); hud(); showInfo(sel);
+});
 function upgrade(b) {
-  const d = B[b.t], c = d.cost[b.lv];
-  if (S.gold < c || busyCount() >= BUILDERS) return;
-  S.gold -= c; b.up = now() + d.time[b.lv] * 1000;
+  const d = B[b.t], c = d.cost[b.lv], cur = d.cur || "gold";
+  if (S[cur] < c || busyCount() >= builders()) return;
+  S[cur] -= c; b.up = now() + d.time[b.lv] * 1000;
   if (!d.time[b.lv]) b.up = now(); // instant (walls lv1)
   refreshMesh(b); bounce(b._m); beep(440); save(); villageTick(); showInfo(b);
 }
 function showArmy() {
-  const cap = armyCap(), used = armySpace(), bl = barracksLv(), t = now();
-  const q = S.queue.map(x => T[x.t].icon).join(" ");
-  $("army").innerHTML = `<h3>⚔️ Army · ${used}/${cap} space <button onclick="closeSheets()">✕</button></h3>
-    <p>${cap ? "Tap a troop to train it with 🌾 food." : "Build a Barracks to train troops."}</p><div class="cards">` +
-    Object.entries(T).map(([k, u]) => {
-      const locked = u.unlock > bl, off = locked || S.food < u.cost || used + u.space > cap;
-      return `<div class="card ${off ? "off" : ""}" data-k="${k}"><span class="i">${u.icon}</span><b>${u.name}</b><small>${locked ? `🔒 Barracks lv ${u.unlock}` : `🌾 ${u.cost} · 👥 ${u.space}`}</small><small>Have ${S.army[k] || 0}</small></div>`;
-    }).join("") + `</div>${q ? `<p>Training: ${q} · next in ${Math.max(0, Math.ceil((S.queue[0].end - t) / 1000))}s</p>` : ""}`;
+  const cap = armyCap(), used = armySpace(false), scap = spellCap(), sused = armySpace(true), t = now();
+  const q = S.queue.map(x => T[x.t].icon).join(" "), list = Object.entries(T).filter(([, u]) => !u.hero);
+  const card = ([k, u]) => {
+    const locked = u.unlock > lvOf(u.spell ? "shrine" : "barracks"), off = locked || (u.spell ? sused + u.space > scap : used + u.space > cap);
+    return `<div class="card ${off ? "off" : ""}" data-k="${k}"><span class="i">${u.icon}</span><b>${u.name} ${tlv(k)}</b><small>${locked ? `🔒 ${u.spell ? "Shrine" : "Barracks"} lv ${u.unlock}` : `👥 ${u.space} · free`}</small><small>Have ${S.army[k] || 0}</small></div>`;
+  };
+  setHTML($("army"), `<h3>⚔️ Army · ${used}/${cap} space <button onclick="closeSheets()">✕</button></h3>
+    <p>${cap ? "Training is free · tap to queue." : "Build a Barracks to train troops."}${heroReady() ? " 👑 Warlord is ready." : ""}</p><div class="cards">${list.filter(([, u]) => !u.spell).map(card).join("")}</div>` +
+    (scap ? `<p>🔮 Spells · ${sused}/${scap}</p><div class="cards">${list.filter(([, u]) => u.spell).map(card).join("")}</div>` : "") +
+    (q ? `<p>Training: ${q} · next in ${Math.max(0, Math.ceil((S.queue[0].end - t) / 1000))}s</p>` : ""));
   $("army").hidden = false;
 }
 $("army").onclick = e => {
   const c = e.target.closest(".card:not(.off)"); if (!c) return;
   const u = T[c.dataset.k], start = Math.max(now(), S.queue.at(-1)?.end || 0);
-  S.food -= u.cost; S.queue.push({ t: c.dataset.k, end: start + u.space * 1500 }); beep(520); save(); hud(); showArmy();
+  S.queue.push({ t: c.dataset.k, end: start + (u.spell ? 6000 : u.space * 1500) }); beep(520); save(); hud(); showArmy();
 };
 
 // ---------- placement ----------
@@ -459,9 +560,9 @@ function commitPlace() {
   if (!placing.ok) return beep(150, .15, "square");
   const { t, moving, x, y } = placing, d = B[t];
   if (moving) { moving.x = x; moving.y = y; refreshMesh(moving); bounce(moving._m); endPlace(); save(); return; }
-  if (S.gold < d.cost[0]) return toast("Not enough gold");
-  if (d.time[0] && busyCount() >= BUILDERS) return toast("No free builder");
-  S.gold -= d.cost[0];
+  if (S[d.cur || "gold"] < d.cost[0]) return toast(`Not enough ${RI[d.cur || "gold"]}`);
+  if (d.time[0] && busyCount() >= builders()) return toast("No free builder");
+  S[d.cur || "gold"] -= d.cost[0];
   const b = { t, x, y, lv: 0, up: now() + d.time[0] * 1000, last: now() };
   if (!d.time[0]) { b.lv = 1; b.up = 0; }
   S.b.push(b); refreshMesh(b); bounce(b._m);
@@ -480,7 +581,7 @@ function endPlace() {
 // ---------- raid ----------
 let R = null;
 function genEnemy() {
-  const L = Math.min(3, Math.max(keep().lv, 1 + Math.floor(S.raids / 3))), bs = [], occ = new Set(), lvl = () => Math.max(1, L - (Math.random() < .4 ? 1 : 0));
+  const L = Math.min(5, Math.max(keep().lv, 1 + Math.floor(S.raids / 3))), bs = [], occ = new Set(), lvl = () => Math.max(1, L - (Math.random() < .4 ? 1 : 0));
   const put = (t, x, y, lv = lvl()) => {
     const s = B[t].size;
     if (x < 1 || y < 1 || x + s > N - 1 || y + s > N - 1) return false;
@@ -490,23 +591,26 @@ function genEnemy() {
   };
   const tryPut = (t, x0, x1, n) => { for (let i = 0, k = 0; i < n && k < 300; k++) if (put(t, x0 + Math.random() * (x1 - x0) | 0, x0 + Math.random() * (x1 - x0) | 0)) i++; };
   put("keep", 10, 10, L);
-  const r0 = 6, r1 = 17; // wall ring
+  const r0 = L >= 4 ? 4 : 6, r1 = N - 1 - r0; // wall ring, wider for big forts
   for (let i = r0; i <= r1; i++) { put("wall", i, r0, L); put("wall", i, r1, L); put("wall", r0, i, L); put("wall", r1, i, L); }
   tryPut("cannon", r0 + 1, r1 - 1, L + (S.raids > 5 ? 1 : 0));
   tryPut("tower", r0 + 1, r1 - 1, L);
+  if (L >= 2) tryPut("catapult", r0 + 1, r1 - 1, L - 1);
+  if (L >= 3) tryPut("ballista", r0 + 1, r1 - 1, L - 2);
+  tryPut("trap", r0 + 1, r1 - 1, L + 1);
   tryPut("vault", r0 + 1, r1 - 1, 1);
   tryPut("mine", 1, N - 3, 1 + L); tryPut("farm", 1, N - 3, 1 + L);
   if (L >= 2) tryPut("barracks", 1, N - 4, 1);
   const loot = Math.round((350 + 450 * L) * (1 + Math.min(S.raids, 20) * .05));
-  return { bs, gold: loot, food: Math.round(loot * .8), L };
+  return { bs, gold: loot, food: Math.round(loot * .8), crystal: L >= 3 ? 60 * L : 0, L };
 }
 function startRaid() {
   closeSheets(); ac ||= new AudioContext();
   const E = genEnemy();
   clearWorld(); mode = "raid";
-  R = { E, bs: E.bs, troops: [], proj: [], deploy: { ...S.army }, time: 150, pct: 0, stars: 0, keepDown: false, ended: false, pick: null, occ: [] };
+  R = { E, bs: E.bs, troops: [], proj: [], deploy: { ...S.army, ...(heroReady() && { hero: 1 }) }, time: 150, pct: 0, stars: 0, keepDown: false, ended: false, pick: null, occ: [] };
   S.army = {}; save();
-  for (const b of R.bs) { b.max = b.hp = B[b.t].hp[b.lv - 1]; b.cd = 0; mountBuilding(b, 1); }
+  for (const b of R.bs) { b.max = b.hp = B[b.t].hp[b.lv - 1]; b.cd = 0; mountBuilding(b, 1).visible = !B[b.t].trap; }
   rebuildOcc();
   // red tint where troops can't be dropped (within 1 tile of a building)
   forbidMesh.material.map = gridTex(x => { x.fillStyle = "#ff3030"; for (let i = 0; i < N * N; i++) if (nearBuilding(i % N, i / N | 0)) x.fillRect(i % N, i / N | 0, 1, 1); });
@@ -517,34 +621,53 @@ function startRaid() {
   resetCam(); troopBar(); raidHud();
   toast("Tap the green area to drop troops · hold to drop many");
 }
-const nearBuilding = (x, y) => R.bs.some(b => { const s = B[b.t].size; return x >= b.x - 1 && x <= b.x + s && y >= b.y - 1 && y <= b.y + s; });
-function rebuildOcc() { R.occ = Array(N * N).fill(null); for (const b of R.bs) if (!b.dead) { const s = B[b.t].size; for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) R.occ[(b.y + dy) * N + b.x + dx] = b; } }
+const nearBuilding = (x, y) => R.bs.some(b => { if (B[b.t].trap) return false; const s = B[b.t].size; return x >= b.x - 1 && x <= b.x + s && y >= b.y - 1 && y <= b.y + s; });
+function rebuildOcc() { R.occ = Array(N * N).fill(null); for (const b of R.bs) if (!b.dead && !B[b.t].trap) { const s = B[b.t].size; for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) R.occ[(b.y + dy) * N + b.x + dx] = b; } }
 function troopBar() {
-  $("troopBar").innerHTML = Object.entries(R.deploy).filter(([, n]) => n > 0).map(([k, n]) => `<button data-k="${k}" aria-pressed="${k === R.pick}"><span class="i">${T[k].icon}</span>×${n}</button>`).join("") || `<span class="pill">All troops deployed</span>`;
+  $("troopBar").innerHTML = Object.entries(R.deploy).filter(([, n]) => n > 0).map(([k, n]) => `<button data-k="${k}" aria-pressed="${k === R.pick}"><span class="i">${T[k].icon}</span>×${n}</button>`).join("") +
+    (R.hero && !R.hero.dead && !R.cry ? `<button data-cry="1"><span class="i">📣</span>War Cry</button>` : "") || `<span class="pill">All troops deployed</span>`;
 }
-$("troopBar").onclick = e => { const b = e.target.closest("button"); if (b) { R.pick = b.dataset.k; troopBar(); } };
+$("troopBar").onclick = e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.cry) warCry(); else R.pick = b.dataset.k; troopBar(); };
+function warCry() { // hero ability, once per raid: heal 35% and double damage for 6s
+  const h = R.hero; if (h.dead) return;
+  R.cry = 1; h.hp = Math.min(h.max, h.hp + h.max * .35); h.rage = 6; h._bar && (h._bar.firstChild.style.width = h.hp / h.max * 100 + "%");
+  burst(h.x, 1, h.z, 0xffc93c, 24, 4); beep(330, .3, "sawtooth"); beep(495, .3, "sawtooth");
+}
+function cast(k, x, z) {
+  const u = T[k], p = u.dmg * boost(k);
+  const ring = new THREE.Mesh(G("ring" + u.radius, () => new THREE.RingGeometry(u.radius - .1, u.radius, 32).rotateX(-Math.PI / 2)), new THREE.MeshBasicMaterial({ color: k === "bolt" ? 0xfff27a : 0x6be06b, transparent: true }));
+  ring.position.set(x, .05, z); world.add(ring); anims.push({ t: 0, dur: .8, f: q => { ring.material.opacity = 1 - q; if (q >= 1) world.remove(ring); } });
+  if (k === "bolt") { for (const b of R.bs) if (!b.dead && !B[b.t].trap && distRect(x, z, b) <= u.radius) hurtBuilding(b, p); burst(x, 3, z, 0xfff27a, 24, 5); beep(60, .4, "sawtooth", .12); }
+  else { for (const t of R.troops) if (!t.dead && Math.hypot(t.x - x, t.z - z) <= u.radius) { t.hp = Math.min(t.max, t.hp + p); t._bar && (t._bar.firstChild.style.width = t.hp / t.max * 100 + "%"); } burst(x, .5, z, 0x6be06b, 20, 3); beep(700, .3, "sine"); }
+}
 function raidHud() {
   const m = Math.max(0, Math.ceil(R.time));
   $("rTime").textContent = `⏱ ${m / 60 | 0}:${String(m % 60).padStart(2, "0")}`;
   $("rPct").innerHTML = `💥 ${Math.round(R.pct * 100)}% · ${[0, 1, 2].map(i => `<span class="${i < R.stars ? "" : "dim"}">⭐</span>`).join("")}`;
-  $("rLoot").textContent = `Loot 🪙 ${Math.floor(R.E.gold * R.pct)} 🌾 ${Math.floor(R.E.food * R.pct)}`;
+  $("rLoot").textContent = `Loot 🪙 ${Math.floor(R.E.gold * R.pct)} 🌾 ${Math.floor(R.E.food * R.pct)}${R.E.crystal ? ` 💎 ${Math.floor(R.E.crystal * R.pct)}` : ""}`;
 }
 function deploy(tile) {
   if (!R || R.ended || !tile) return;
   const x = Math.floor(tile.fx), y = Math.floor(tile.fz);
   if (x < 0 || y < 0 || x >= N || y >= N) return;
-  if (nearBuilding(x, y)) { toast("Too close to the fort · drop on the green"); forbidMesh.material.opacity = .5; setTimeout(() => forbidMesh.material.opacity = .28, 300); return; }
   const k = R.pick; if (!k || !(R.deploy[k] > 0)) return;
+  const u = T[k];
+  if (u.spell) cast(k, tile.fx - N / 2, tile.fz - N / 2); // spells can land anywhere
+  else {
+    if (nearBuilding(x, y)) { toast("Too close to the fort · drop on the green"); forbidMesh.material.opacity = .5; setTimeout(() => forbidMesh.material.opacity = .28, 300); return; }
+    const st = u.hero ? heroStats() : { hp: u.hp * boost(k), dmg: u.dmg * boost(k), speed: u.speed };
+    const m = troopModel(k), t = { k, hp: st.hp, max: st.hp, dmg: st.dmg, speed: st.speed, x: tile.fx - N / 2 + (Math.random() - .5) * .3, z: tile.fz - N / 2 + (Math.random() - .5) * .3, cd: 0, m, air: !!u.air };
+    m.position.x = t.x; m.position.z = t.z; world.add(m); R.troops.push(t);
+    if (u.hero) R.hero = t;
+    burst(t.x, .3, t.z, 0xffffff, 6, 2, .6); beep(400 + Math.random() * 100, .05);
+  }
   R.deploy[k]--;
-  const u = T[k], m = troopModel(k), t = { k, hp: u.hp, max: u.hp, x: tile.fx - N / 2 + (Math.random() - .5) * .3, z: tile.fz - N / 2 + (Math.random() - .5) * .3, cd: 0, m, air: !!u.air };
-  m.position.x = t.x; m.position.z = t.z; world.add(m); R.troops.push(t);
-  burst(t.x, .3, t.z, 0xffffff, 6, 2, .6); beep(400 + Math.random() * 100, .05);
   if (!(R.deploy[k] > 0)) R.pick = Object.keys(R.deploy).find(q => R.deploy[q] > 0);
   troopBar();
 }
 function findTarget(t) {
-  const alive = R.bs.filter(b => !b.dead && b.t !== "wall");
-  let pool = T[t.k].prefers === "def" ? alive.filter(b => b.t === "cannon" || b.t === "tower") : alive;
+  const alive = R.bs.filter(b => !b.dead && b.t !== "wall" && !B[b.t].trap);
+  let pool = T[t.k].prefers === "def" ? alive.filter(b => B[b.t].dmg) : alive;
   if (!pool.length) pool = alive;
   let best = null, bd = Infinity;
   for (const b of pool) { const d = distRect(t.x, t.z, b); if (d < bd) { bd = d; best = b; } }
@@ -579,7 +702,7 @@ function hurtBuilding(b, n) {
   burst(x, .8, z, 0x8a8276, 14 + B[b.t].size * 6, 4); burst(x, 1, z, 0xffa040, 8, 3);
   beep(90, .3, "sawtooth", .1);
   rebuildOcc();
-  const core = R.bs.filter(q => q.t !== "wall");
+  const core = R.bs.filter(q => q.t !== "wall" && !B[q.t].trap);
   R.pct = core.filter(q => q.dead).length / core.length;
   if (b.t === "keep") R.keepDown = true;
   const st = (R.pct >= .5) + R.keepDown + (R.pct >= 1);
@@ -595,11 +718,12 @@ function hurtTroop(t, n) {
   t.dead = true; t._bar.remove(); world.remove(t.m);
   burst(t.x, t.air ? 2.4 : .4, t.z, t.k === "bird" ? 0xff7a1a : 0xeeeeee, 10, 2.5, .7);
 }
-function shoot(from, target, dmg, kind) {
-  const m = new THREE.Mesh(kind === "ball" ? sph(.16) : kind === "fire" ? sph(.14) : kind === "rock" ? dode(.09) : box(.05, .05, .4), mat(kind === "ball" ? 0x222222 : kind === "fire" ? 0xff7a1a : kind === "rock" ? 0x777777 : 0x8b5a2b, kind === "fire"));
+const PK = { ball: [() => sph(.16), 0x222222, 9, 1.5], fire: [() => sph(.14), 0xff7a1a, 12, .2], rock: [() => dode(.09), 0x777777, 12, .6], arrow: [() => box(.05, .05, .4), 0x8b5a2b, 18, .2], boulder: [() => dode(.22), 0x8a8276, 7, 3] }; // geometry, colour, speed, arc
+function shoot(from, target, dmg, kind, splash) {
+  const [geo, c, sp, arc] = PK[kind], m = new THREE.Mesh(geo(), mat(c, kind === "fire"));
   m.position.copy(from); world.add(m);
   const to = targetPos(target);
-  R.proj.push({ m, from: from.clone(), target, dmg, kind, u: 0, dur: Math.max(.15, from.distanceTo(to) / (kind === "arrow" ? 18 : kind === "ball" ? 9 : 12)), arc: kind === "ball" ? 1.5 : kind === "rock" ? .6 : .2 });
+  R.proj.push({ m, from: from.clone(), target, dmg, kind, splash, u: 0, dur: Math.max(.15, from.distanceTo(to) / sp), arc });
 }
 const targetPos = e => e.k ? new V3(e.x, e.air ? 2.4 : .4, e.z) : (([x, z]) => new V3(x, .8, z))(center(e));
 function raidTick(dt) {
@@ -608,7 +732,8 @@ function raidTick(dt) {
   // troops
   for (const t of R.troops) {
     if (t.dead) continue;
-    const u = T[t.k];
+    const u = T[t.k], dmg = t.dmg * (t.rage > 0 ? 2 : 1);
+    if (t.rage > 0) t.rage -= dt;
     if (t.wall?.dead) t.wall = null;
     if (!t.target || t.target.dead) { t.target = findTarget(t); t.path = null; t.wall = null; if (!t.target) continue; }
     const tg = t.wall || t.target, d = distRect(t.x, t.z, tg);
@@ -618,8 +743,8 @@ function raidTick(dt) {
       if (t.cd <= 0) {
         t.cd = u.rate;
         // walls take 3x (goats 6x) so raids keep moving
-        if (u.range > 1.5) shoot(new V3(t.x, t.air ? 2.4 : .6, t.z), tg, u.dmg, t.k === "bird" ? "fire" : "rock");
-        else { hurtBuilding(tg, tg.t === "wall" ? u.dmg * (t.k === "goat" ? 6 : 3) : u.dmg); anims.push({ t: 0, dur: .25, f: k => t.m.position.y = (t.air ? 2.4 : 0) + Math.sin(k * Math.PI) * .25 }); burst(t.x + (cx - t.x) * .3, .5, t.z + (cz - t.z) * .3, 0xbbbbbb, 3, 1.5, .5); }
+        if (u.range > 1.5) shoot(new V3(t.x, t.air ? 2.4 : .6, t.z), tg, dmg, t.k === "bird" ? "fire" : "rock");
+        else { hurtBuilding(tg, tg.t === "wall" ? dmg * (t.k === "goat" ? 6 : 3) : dmg); anims.push({ t: 0, dur: .25, f: k => t.m.position.y = (t.air ? 2.4 : 0) + Math.sin(k * Math.PI) * .25 }); burst(t.x + (cx - t.x) * .3, .5, t.z + (cz - t.z) * .3, 0xbbbbbb, 3, 1.5, .5); }
       }
       continue;
     }
@@ -638,7 +763,7 @@ function raidTick(dt) {
         if (Math.hypot(wx - t.x, wz - t.z) < .12) { t.pi++; continue; }
       }
     }
-    const dx = wx - t.x, dz = wz - t.z, len = Math.hypot(dx, dz) || 1, st = Math.min(len, u.speed * dt);
+    const dx = wx - t.x, dz = wz - t.z, len = Math.hypot(dx, dz) || 1, st = Math.min(len, t.speed * dt);
     t.x += dx / len * st; t.z += dz / len * st;
     t.m.position.x = t.x; t.m.position.z = t.z; t.m.rotation.y = Math.atan2(dx, dz);
     if (!t.air) t.m.position.y = Math.abs(Math.sin(performance.now() / 90 + t.max)) * .08; // waddle
@@ -646,18 +771,25 @@ function raidTick(dt) {
   // defences
   for (const b of R.bs) {
     const d = B[b.t]; if (b.dead || !d.dmg) continue;
-    b.cd -= dt;
     const [bx, bz] = center(b);
+    if (d.trap) { // springs once when a ground troop steps on it
+      if (!R.troops.some(t => !t.dead && !t.air && Math.hypot(t.x - bx, t.z - bz) < .6)) continue;
+      b.dead = true; b._m.visible = true; bounce(b._m);
+      for (const t of R.troops) if (!t.dead && !t.air && Math.hypot(t.x - bx, t.z - bz) < 1.4) hurtTroop(t, d.dmg[b.lv - 1]);
+      burst(bx, .3, bz, 0xcccccc, 16, 4); beep(140, .25, "square", .1); toast("🪤 Spike trap!");
+      continue;
+    }
+    b.cd -= dt;
     if (!b.tgt || b.tgt.dead || distRect(b.tgt.x, b.tgt.z, b) > d.range) {
       b.tgt = null; let bd = Infinity;
-      for (const t of R.troops) { if (t.dead || (d.ground && t.air)) continue; const q = distRect(t.x, t.z, b); if (q <= d.range && q < bd) { bd = q; b.tgt = t; } }
+      for (const t of R.troops) { if (t.dead || (d.ground && t.air) || (d.air && !t.air)) continue; const q = distRect(t.x, t.z, b); if (q <= d.range && q >= (d.min || 0) && q < bd) { bd = q; b.tgt = t; } }
     }
     if (!b.tgt) continue;
     if (b._m.userData.turret) b._m.userData.turret.rotation.y = Math.atan2(b.tgt.x - bx, b.tgt.z - bz);
     if (b.cd <= 0) {
       b.cd = d.rate;
-      shoot(new V3(bx, b.t === "tower" ? 2.6 + b.lv * .35 : .8, bz), b.tgt, d.dmg[b.lv - 1], b.t === "cannon" ? "ball" : "arrow");
-      if (b.t === "cannon") { beep(120, .12, "square", .05); burst(bx, 1, bz, 0xdddddd, 3, 1.2, .5); }
+      shoot(new V3(bx, b.t === "tower" ? 2.6 + b.lv * .35 : b.t === "ballista" ? 2.4 : .8, bz), b.tgt, d.dmg[b.lv - 1], { cannon: "ball", catapult: "boulder" }[b.t] || "arrow", d.splash);
+      if (b.t === "cannon" || b.t === "catapult") { beep(120, .12, "square", .05); burst(bx, 1, bz, 0xdddddd, 3, 1.2, .5); }
     }
   }
   // projectiles
@@ -669,6 +801,7 @@ function raidTick(dt) {
     if (p.u >= 1) {
       world.remove(p.m); p.done = true;
       if (p.target.k) hurtTroop(p.target, p.dmg); else hurtBuilding(p.target, p.dmg);
+      if (p.splash) { for (const t of R.troops) if (!t.dead && !t.air && t !== p.target && Math.hypot(t.x - to.x, t.z - to.z) < p.splash) hurtTroop(t, p.dmg); burst(to.x, .3, to.z, 0x8a8276, 10, 3, .7); }
       if (p.kind === "ball" || p.kind === "fire") burst(to.x, to.y, to.z, p.kind === "fire" ? 0xff7a1a : 0x555555, 5, 2, .6);
     }
   }
@@ -677,20 +810,21 @@ function raidTick(dt) {
   for (const b of R.bs) if (b._bar) { const [x, z] = center(b); placeLabel(b._bar, x, B[b.t].h + .3, z); }
   for (const t of R.troops) if (t._bar && !t.dead) placeLabel(t._bar, t.x, t.air ? 3.1 : 1.1, t.z);
   if ((R.hudT = (R.hudT || 0) + dt) > .25) { R.hudT = 0; raidHud(); }
-  const left = Object.values(R.deploy).some(n => n > 0), alive = R.troops.some(t => !t.dead);
+  const left = Object.entries(R.deploy).some(([k, n]) => n > 0 && !T[k].spell), alive = R.troops.some(t => !t.dead);
   if (R.time <= 0 || R.pct >= 1 || (!left && !alive && R.troops.length)) endRaid();
 }
 function endRaid() {
   if (R.ended) return;
   R.ended = true;
-  for (const [k, n] of Object.entries(R.deploy)) if (n > 0) S.army[k] = (S.army[k] || 0) + n; // undeployed troops return home
-  const c = caps(), g = Math.min(Math.floor(R.E.gold * R.pct), c.gold - S.gold), f = Math.min(Math.floor(R.E.food * R.pct), c.food - S.food);
-  S.gold += Math.max(0, g); S.food += Math.max(0, f);
-  const tr = R.stars ? R.stars * 10 : -5; S.trophies = Math.max(0, S.trophies + tr); S.raids++;
+  for (const [k, n] of Object.entries(R.deploy)) if (n > 0 && k !== "hero") S.army[k] = (S.army[k] || 0) + n; // undeployed troops & spells return home
+  const c = caps(), take = r => Math.max(0, Math.min(Math.floor(R.E[r] * R.pct), c[r] - S[r])), g = take("gold"), f = take("food"), cr = take("crystal");
+  S.gold += g; S.food += f; S.crystal += cr;
+  const tr = R.stars ? R.stars * 10 : -5, ore = R.stars * 4, hg = R.stars === 3 ? 1 : 0; S.trophies = Math.max(0, S.trophies + tr); S.raids++;
+  S.ore += ore; S.hg += hg; xp(5 + R.stars * 15);
   save();
   $("resultBox").innerHTML = `<h1>${R.stars ? "Victory!" : "Defeat"}</h1>
     <div class="stars">${[0, 1, 2].map(i => `<span class="${i < R.stars ? "" : "dim"}" style="animation-delay:${.2 + i * .2}s">⭐</span>`).join("")}</div>
-    <p>💥 ${Math.round(R.pct * 100)}% destroyed</p><p>Loot 🪙 ${Math.max(0, g)} · 🌾 ${Math.max(0, f)} · 🏆 ${tr > 0 ? "+" : ""}${tr}</p>
+    <p>💥 ${Math.round(R.pct * 100)}% destroyed</p><p>Loot 🪙 ${g} · 🌾 ${f}${cr ? ` · 💎 ${cr}` : ""} · 🏆 ${tr > 0 ? "+" : ""}${tr}</p>${ore ? `<p>✨ +${ore} ore${hg ? " · ⏳ +1 hourglass" : ""}</p>` : ""}
     <div class="row" style="justify-content:center"><button class="go" id="bHome">Return home</button></div>`;
   $("result").hidden = false;
   [523, 659, 784].slice(0, R.stars || 1).forEach((f, i) => setTimeout(() => beep(R.stars ? f : 200 - i * 40, .2), i * 150));
