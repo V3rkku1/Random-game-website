@@ -187,7 +187,12 @@ const crack = new THREE.Mesh(new THREE.BoxGeometry(1.01, 1.01, 1.01), new THREE.
 scene.add(sel, crack);
 const hand = new THREE.Group(), headMat = new THREE.MeshLambertMaterial({ color: PICK[0].col });
 hand.add(new THREE.Mesh(new THREE.BoxGeometry(.05, .5, .05), new THREE.MeshLambertMaterial({ color: 0x6b4a2b })));
-const head = new THREE.Mesh(new THREE.BoxGeometry(.42, .07, .07), headMat); head.position.y = .23; hand.add(head);
+for (let i = -6; i <= 6; i++) { // curved head: tapered segments along an arc, tips bending down
+  const a = i * .17, w = .085 - Math.abs(i) * .009, seg = new THREE.Mesh(new THREE.BoxGeometry(.06, w, .06), headMat);
+  seg.position.set(Math.sin(a) * .32, .02 + Math.cos(a) * .2, 0); seg.rotation.z = -a; hand.add(seg);
+}
+const collar = new THREE.Mesh(new THREE.BoxGeometry(.075, .09, .075), new THREE.MeshLambertMaterial({ color: 0x3a3a40 })); collar.position.y = .2; hand.add(collar);
+const grip = new THREE.Mesh(new THREE.BoxGeometry(.06, .16, .06), new THREE.MeshLambertMaterial({ color: 0x3b2a1a })); grip.position.y = -.17; hand.add(grip);
 const arm = new THREE.Mesh(new THREE.BoxGeometry(.13, .13, .5), new THREE.MeshLambertMaterial({ color: 0xd09a70 })); arm.position.set(0, -.3, .1); arm.rotation.x = .35; hand.add(arm);
 hand.position.set(.3, -.3, -.55); hand.rotation.set(-.3, 0, -.4); hand.scale.setScalar(.7); camera.add(hand);
 const clouds = new THREE.Group(), cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .85, fog: false });
