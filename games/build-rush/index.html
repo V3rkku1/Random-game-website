@@ -16,9 +16,20 @@
   .slot small { position: absolute; top: 3px; left: 6px; font-size: 11px; opacity: .7; }
   .slot.on { border-color: #ffd166; transform: translateY(-6px); background: #000c; }
   .slot.on svg { stroke: #ffd166; }
-  #mat { margin-left: 10px; padding: 8px 12px; border-radius: 12px; background: #0009; display: flex; gap: 8px; align-items: center; }
-  #mat i { width: 18px; height: 18px; border-radius: 5px; display: inline-block; opacity: .35; border: 2px solid transparent; }
-  #mat i.on { opacity: 1; border-color: #fff; }
+  #mat { margin-left: 10px; padding: 6px 10px; border-radius: 12px; background: #0009; display: flex; gap: 10px; align-items: center; }
+  #mat .m { display: flex; align-items: center; gap: 5px; opacity: .45; font-variant-numeric: tabular-nums; min-width: 52px; }
+  #mat .m.on { opacity: 1; } #mat .m.low b { color: #ff7a6a; }
+  #mat i { width: 16px; height: 16px; border-radius: 4px; display: inline-block; border: 2px solid transparent; }
+  #mat .m.on i { border-color: #fff; }
+  #hp { position: fixed; left: 16px; bottom: 18px; width: 220px; }
+  #hp div { height: 14px; border-radius: 7px; background: #0009; overflow: hidden; border: 2px solid #ffffff30; }
+  #hp i { display: block; height: 100%; background: linear-gradient(90deg, #4cd964, #8ef08f); transition: width .2s; }
+  #hp span { font-size: 12px; opacity: .85; }
+  #aimInfo { position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); font-size: 12px; background: #0008; padding: 4px 10px; border-radius: 8px; white-space: nowrap; pointer-events: none; }
+  #aimInfo:empty { display: none; }
+  #aimInfo i { display: block; height: 4px; margin-top: 3px; border-radius: 2px; background: #4cd964; }
+  #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px #ff2020; opacity: 0; transition: opacity .5s; }
+  .gain { position: fixed; left: 50%; top: 46%; font: 800 18px Inter, sans-serif; pointer-events: none; text-shadow: 0 2px 6px #000a; }
   #top { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
   .pill { background: #000a; padding: 8px 14px; border-radius: 999px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pill b { color: #ffd166; }
@@ -62,20 +73,23 @@
 <div id="top"></div>
 <div id="hint"></div>
 <div id="flash"></div>
+<div id="aimInfo"></div>
+<div id="hurt"></div>
+<div id="hp"><span>Health <b id="hpT">100</b></span><div><i id="hpBar" style="width:100%"></i></div></div>
 <div id="hot">
   <div class="slot" data-t="pick"><small data-a="pick">E</small><svg viewBox="0 0 32 32"><path d="M6 10 Q16 2 26 10 M16 7 V28"/></svg></div>
   <div class="slot" data-t="wall"><small data-a="wall">Q</small><svg viewBox="0 0 32 32"><rect x="7" y="5" width="18" height="22"/></svg></div>
   <div class="slot" data-t="floor"><small data-a="floor">F</small><svg viewBox="0 0 32 32"><path d="M3 20 L13 13 H29 L19 20 Z"/></svg></div>
   <div class="slot" data-t="ramp"><small data-a="ramp">C</small><svg viewBox="0 0 32 32"><path d="M4 26 H28 V6 Z"/></svg></div>
   <div class="slot" data-t="cone"><small data-a="cone">V</small><svg viewBox="0 0 32 32"><path d="M3 24 L16 8 L29 24 Z M16 8 V24"/></svg></div>
-  <div id="mat"><small data-a="mat">T</small><i style="background:#b07a45"></i><i style="background:#b5523b"></i><i style="background:#8d99a8"></i></div>
+  <div id="mat"><small data-a="mat">T</small><span class="m"><i style="background:#b07a45"></i><b>0</b></span><span class="m"><i style="background:#b5523b"></i><b>0</b></span><span class="m"><i style="background:#8d99a8"></i><b>0</b></span></div>
 </div>
 
 <div class="ov" id="menu"><div class="box">
   <h1>BUILD RUSH</h1>
   <div class="sub">Build fast. Edit faster.</div>
   <div class="modes">
-    <button class="mode" data-m="free"><b>🏗️ Free Build</b><span>Sandbox. Build anything, practise edits and ramps.</span></button>
+    <button class="mode" data-m="free"><b>🏗️ Free Build</b><span>Pickaxe trees, rocks and cars for mats. Build, edit, break.</span></button>
     <button class="mode" data-m="climb"><b>🚀 Climb</b><span>Reach the ring 10 floors up. Ramp rush as fast as you can.</span><em id="bestClimb"></em></button>
     <button class="mode" data-m="drill"><b>✂️ Edit Drill</b><span>Copy the glowing edit on your walls. 60 seconds.</span><em id="bestDrill"></em></button>
   </div>
@@ -104,7 +118,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // three.js + hand-rolled AABB/slope physics on a 4m build grid. No physics engine: pieces are boxes or analytic slopes.
-const C = 4, V3 = THREE.Vector3, $ = id => document.getElementById(id);
+const C = 5, V3 = THREE.Vector3, $ = id => document.getElementById(id);
 const store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
 
 // ---------- renderer / scene ----------
@@ -147,6 +161,8 @@ const MATS = [
   tex(128, 128, (x, w) => { const g = x.createLinearGradient(0, 0, w, w); g.addColorStop(0, "#a4afbd"); g.addColorStop(1, "#7f8a98"); x.fillStyle = g; x.fillRect(0, 0, w, w); x.strokeStyle = "#5d6673"; x.lineWidth = 3; x.strokeRect(2, 2, w - 4, w - 4); x.beginPath(); x.moveTo(0, w / 2); x.lineTo(w, w / 2); x.stroke(); x.fillStyle = "#cfd6df"; for (const [a, b] of [[10, 10], [w - 10, 10], [10, w - 10], [w - 10, w - 10], [10, w / 2 - 8], [w - 10, w / 2 + 8]]) { x.beginPath(); x.arc(a, b, 3, 0, 7); x.fill(); } }),
 ].map(map => new THREE.MeshStandardMaterial({ map, roughness: .8 }));
 MATS[2].metalness = .4; MATS[2].roughness = .45;
+MATS.forEach(m => m.side = THREE.DoubleSide); // cone edits are open surfaces
+const MATINFO = [{ name: "Wood", hp: 150, build: 1.2 }, { name: "Brick", hp: 300, build: 2.6 }, { name: "Metal", hp: 500, build: 4.2 }], COST = 10, CAP = 999;
 const MAT_COL = [0xb07a45, 0xb5523b, 0x8d99a8];
 const ghostMat = new THREE.MeshBasicMaterial({ color: 0x5ab0ff, transparent: true, opacity: .35, depthWrite: false });
 const ghostBad = new THREE.MeshBasicMaterial({ color: 0xff5a5a, transparent: true, opacity: .25, depthWrite: false });
@@ -174,12 +190,26 @@ function buildMesh(p, mat) {
     const m = new THREE.Mesh(bg(C, .2, RL), mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; slab.add(m);
     g.position.set(p.i * C + C / 2, p.j * C + C / 2, p.k * C + C / 2); g.rotation.y = ROT[p.dir];
   } else {
-    const m = new THREE.Mesh(G_CONE, mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; m.position.y = C / 4; m.rotation.y = Math.PI / 4; g.add(m);
+    const m = new THREE.Mesh(coneGeo(removed), mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; g.add(m);
     g.position.set(p.i * C + C / 2, p.j * C, p.k * C + C / 2);
   }
   return g;
 }
-const G_CONE = new THREE.ConeGeometry(C / Math.SQRT2, C / 2, 4, 1, false);
+// cone = 3x3 grid of heights (a,b in 0..2). Centre is the peak; a selected quadrant raises its outer corner,
+// so 2 tiles on one side = slope, 4 tiles = flat roof. Quadrant q = b*2+a.
+function coneH(sel, a, b) {
+  if (a === 1 && b === 1) return C / 2;
+  const qa = a === 1 ? [0, 1] : [a / 2], qb = b === 1 ? [0, 1] : [b / 2];
+  return qa.every(x => qb.every(y => sel.has(y * 2 + x))) ? C / 2 : 0;
+}
+const coneCache = {};
+function coneGeo(sel) {
+  const key = [...sel].sort().join(); if (coneCache[key]) return coneCache[key];
+  const pos = [], uv = [], v = (a, b) => { pos.push(a / 2 * C - C / 2, coneH(sel, a, b), b / 2 * C - C / 2); uv.push(a / 2, b / 2); };
+  for (const qa of [0, 1]) for (const qb of [0, 1]) { const A = qa * 2, B = qb * 2; v(1, 1); v(A, 1); v(A, B); v(1, 1); v(A, B); v(1, B); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
+  return coneCache[key] = g;
+}
 // collision boxes [x0,y0,z0,x1,y1,z1] for walls and floors
 function boxesOf(p) {
   const out = [], rm = p.removed;
@@ -200,21 +230,66 @@ function surfaceAt(p, x, z) {
   const u = (x - p.i * C) / C, v = (z - p.k * C) / C;
   if (u < 0 || u > 1 || v < 0 || v > 1) return null;
   if (p.kind === "ramp") return p.j * C + [u, v, 1 - u, 1 - v][p.dir] * C + .14;
-  if (p.kind === "cone") return p.j * C + C / 2 * (1 - 2 * Math.max(Math.abs(u - .5), Math.abs(v - .5))) + .05;
+  if (p.kind === "cone") { // same triangle split as coneGeo: centre -> edge midpoint -> corner
+    const qa = u < .5 ? 0 : 1, qb = v < .5 ? 0 : 1, pp = Math.abs(u - .5) * 2, qq = Math.abs(v - .5) * 2, h = (a, b) => coneH(p.removed || new Set(), a, b);
+    const hc = h(1, 1), hx = h(qa * 2, 1), hz = h(1, qb * 2), hk = h(qa * 2, qb * 2);
+    return p.j * C + (pp >= qq ? hc + pp * (hx - hc) + qq * (hk - hx) : hc + qq * (hz - hc) + pp * (hk - hz)) + .05;
+  }
   return null;
 }
 const root = new THREE.Group(); scene.add(root);
 const anims = [];
 function addPiece(p, anim = true) {
   p.removed ||= new Set(); p.mat ??= mat;
-  p.key = keyOf(p); p.boxes = boxesOf(p);
-  p.mesh = buildMesh(p, MATS[p.mat]); root.add(p.mesh); pieces.set(p.key, p);
+  p.key = keyOf(p); p.boxes = boxesOf(p); p.aabb = aabbOf(p);
+  p.max = MATINFO[p.mat].hp; p.hp = anim ? p.max * .1 : p.max; // starts weak, fills over the material's build time
+  if (anim) { p.buildMat = Object.assign(MATS[p.mat].clone(), { transparent: true, opacity: .4 }); building.add(p); }
+  p.mesh = buildMesh(p, p.buildMat || MATS[p.mat]); root.add(p.mesh); pieces.set(p.key, p);
   if (anim) { const m = p.mesh, s0 = m.scale.clone(); anims.push({ t: 0, d: .18, f: k => m.scale.copy(s0).multiplyScalar(.75 + .25 * (1 - (1 - k) ** 3)) }); }
   return p;
 }
-function rebuild(p) { root.remove(p.mesh); p.boxes = boxesOf(p); p.mesh = buildMesh(p, MATS[p.mat]); root.add(p.mesh); }
-function removePiece(p) { root.remove(p.mesh); pieces.delete(p.key); }
+function rebuild(p) { root.remove(p.mesh); p.boxes = boxesOf(p); p.mesh = buildMesh(p, p.buildMat || MATS[p.mat]); root.add(p.mesh); }
+function removePiece(p) { root.remove(p.mesh); pieces.delete(p.key); building.delete(p); }
 function clearAll() { for (const p of [...pieces.values()]) removePiece(p); }
+const building = new Set();
+function tickBuilding(dt) {
+  for (const p of building) {
+    const info = MATINFO[p.mat]; p.hp = Math.min(p.max, p.hp + p.max * .9 / info.build * dt);
+    const k = p.hp / p.max; p.buildMat.opacity = .4 + .6 * k;
+    if (k >= 1) { building.delete(p); p.buildMat = null; p.mesh.traverse(o => { if (o.isMesh && o.userData.piece) o.material = MATS[p.mat]; }); }
+  }
+}
+// whole-piece bounds for support checks (ignores edits so a door doesn't cut a wall loose)
+function aabbOf(p) {
+  const x0 = p.i * C, z0 = p.k * C, y0 = p.j * C, n = p.k * C;
+  if (p.kind === "wall") return p.axis === "x" ? [p.i * C, y0, n - .13, p.i * C + C, y0 + C, n + .13] : [n - .13, y0, p.i * C, n + .13, y0 + C, p.i * C + C];
+  if (p.kind === "floor") return [x0, y0 - .1, z0, x0 + C, y0 + .1, z0 + C];
+  return [x0, y0, z0, x0 + C, y0 + (p.kind === "cone" ? C / 2 : C), z0 + C];
+}
+const touches = (a, b) => a[0] <= b[3] + .06 && b[0] <= a[3] + .06 && a[1] <= b[4] + .06 && b[1] <= a[4] + .06 && a[2] <= b[5] + .06 && b[2] <= a[5] + .06;
+const grounded = p => p.aabb[1] <= .11;
+const supported = t => { const a = aabbOf(t); return a[1] <= .11 || [...pieces.values()].some(q => touches(a, q.aabb)); };
+function damagePiece(p, n) {
+  p.hp -= n;
+  if (p.hp > 0) return;
+  breakPiece(p); collapse();
+}
+function breakPiece(p, delay = 0) {
+  removePiece(p); p.dying = true;
+  const m = p.mesh, c = m.position; root.add(m);
+  let vy = 0; // falls, tumbles and shrinks; destroyed builds drop nothing
+  anims.push({ t: -delay, d: .9, f: k => { if (k <= 0) return; vy += .02; m.position.y -= vy; m.rotation.x += .02; m.scale.setScalar(Math.max(.01, 1 - k)); if (k >= 1) root.remove(m); } });
+  setTimeout(() => burst(c.x, c.y, c.z, MAT_COL[p.mat], 12), delay * 900);
+  if (editing?.p === p) { editing = null; hint(); }
+  lastGhostKey = "";
+}
+function collapse() { // anything no longer chained to the ground falls
+  const list = [...pieces.values()], ok = new Set(list.filter(grounded)), q = [...ok];
+  while (q.length) { const a = q.pop(); for (const b of list) if (!ok.has(b) && touches(a.aabb, b.aabb)) { ok.add(b); q.push(b); } }
+  const fall = list.filter(p => !ok.has(p));
+  fall.forEach((p, i) => breakPiece(p, Math.min(.6, i * .04)));
+  if (fall.length) { sfx(70, .5, "sawtooth", .08); flash(`${fall.length} piece${fall.length > 1 ? "s" : ""} collapsed`, "#ffb020"); }
+}
 
 // ---------- settings & keybinds (saved in localStorage) ----------
 const ACTIONS = { forward: ["Move forward", "KeyW"], back: ["Move back", "KeyS"], left: ["Move left", "KeyA"], right: ["Move right", "KeyD"], jump: ["Jump", "Space"], sprint: ["Sprint", "ShiftLeft"],
@@ -248,28 +323,58 @@ function applySet() {
 function openSettings(from) { setFrom = from; $(from).hidden = true; $("settings").hidden = false; applySet(); labels(); }
 
 // ---------- player ----------
-const P = { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true }, EYE = 1.6, HEAD = 1.75, R = .32;
+const P = { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true, hp: 100 }, EYE = 1.6, HEAD = 1.75, R = .32;
+let mats = [0, 0, 0], infinite = false;
+function hurt(n) {
+  P.hp = Math.max(0, P.hp - n); $("hurt").style.opacity = .8; setTimeout(() => $("hurt").style.opacity = 0, 150); sfx(110, .25, "square", .08);
+  if (P.hp > 0) return;
+  flash("Knocked out!", "#ff6a5a");
+  Object.assign(P, { x: 2, y: 0, z: 2, vy: 0, hp: 100 }); if (mode === "climb") { clock = 0; running = false; }
+}
+// harvestables: trees -> wood, rocks -> brick, cars -> metal. A weak-spot marker doubles the yield.
+const props = [], spotTex = tex(64, 64, (x, w) => { const g = x.createRadialGradient(32, 32, 4, 32, 32, 30); g.addColorStop(0, "#fff"); g.addColorStop(.35, "#6fd3ff"); g.addColorStop(.7, "#1a8cff88"); g.addColorStop(1, "#1a8cff00"); x.fillStyle = g; x.fillRect(0, 0, w, w); });
+const spot = new THREE.Sprite(new THREE.SpriteMaterial({ map: spotTex, depthTest: false, transparent: true })); spot.scale.setScalar(.7); spot.visible = false; spot.renderOrder = 9; scene.add(spot);
+function makeProps() {
+  for (const o of props) scene.remove(o.mesh);
+  props.length = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a), kinds = [["tree", 26], ["rock", 14], ["car", 7]];
+  const mk = { tree: () => { const g = new THREE.Group(), t = new THREE.Mesh(trunkG, trunkM), l = new THREE.Mesh(leafG, leafM); t.scale.set(1.6, 1.6, 1.6); t.position.y = 1.6; l.position.y = 5; l.scale.setScalar(1.2); t.castShadow = l.castShadow = true; g.add(t, l); return [g, .5, 7, 0, 300]; },
+    rock: () => { const s = rnd(1, 1.5), m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), new THREE.MeshStandardMaterial({ color: 0x8f8a82, flatShading: true })); m.position.y = s * .6; m.scale.y = .75; m.castShadow = true; const g = new THREE.Group(); g.add(m); return [g, s * .85, s * 1.3, 1, 360]; },
+    car: () => { const g = new THREE.Group(), col = [0xd9483b, 0x3b7bd9, 0xe0c23a, 0x5ab06a][Math.random() * 4 | 0], add = (geo, c, x, y, z) => { const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: c, roughness: .5, metalness: .3 })); m.position.set(x, y, z); m.castShadow = true; g.add(m); };
+      add(new THREE.BoxGeometry(4.2, 1, 1.9), col, 0, .8, 0); add(new THREE.BoxGeometry(2.2, .8, 1.7), col, -.2, 1.7, 0); add(new THREE.BoxGeometry(2.1, .6, 1.75), 0x9fd2ff, -.2, 1.75, 0);
+      for (const [x, z] of [[-1.4, -.95], [1.4, -.95], [-1.4, .95], [1.4, .95]]) add(new THREE.CylinderGeometry(.42, .42, .3, 12).rotateX(Math.PI / 2), 0x222222, x, .42, z);
+      g.rotation.y = Math.random() < .5 ? 0 : Math.PI / 2; return [g, 1, 2.2, 2, 450]; } };
+  for (const [kind, n] of kinds) for (let i = 0, tries = 0; i < n && tries < 400; tries++) {
+    const a = rnd(0, Math.PI * 2), r = rnd(16, 62), x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (x > -8 && x < 12 * C && z > -10 && z < 12) continue; // keep the climb lane and spawn clear
+    if (props.some(o => Math.hypot(o.x - x, o.z - z) < 6)) continue;
+    const [mesh, rad, h, m, hp] = mk[kind](); mesh.position.set(x, 0, z); scene.add(mesh);
+    const hx = kind === "car" && mesh.rotation.y === 0 ? 2.1 : rad, hz = kind === "car" && mesh.rotation.y !== 0 ? 2.1 : rad;
+    props.push({ kind, mesh, x, z, rad: Math.max(hx, hz), mat: m, hp, max: hp, boxes: [[x - hx, 0, z - hz, x + hx, h, z + hz]] }); i++;
+  }
+}
+const solids = function* () { for (const p of pieces.values()) yield* p.boxes; for (const o of props) yield* o.boxes; };
 const keys = {};
 let tool = "wall", mat = 0, mode = "menu", editing = null, holding = false, lastGhostKey = "";
 function overlapsBox(x, y, z, b, lift = 0) { return x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && y + lift + .02 < b[4] && y + HEAD > b[1]; }
 function blocked(x, y, z) {
+  for (const b of solids()) if (overlapsBox(x, y, z, b)) return true;
   for (const p of pieces.values()) {
-    for (const b of p.boxes) if (overlapsBox(x, y, z, b)) return true;
     if (p.kind === "ramp" || p.kind === "cone") { const h = surfaceAt(p, x, z); if (h !== null && h > y + .6 && h < y + HEAD) return true; }
   }
   return false;
 }
 function supportAt(x, y, z) { // highest walkable surface at or a little above the feet
   let s = 0;
+  for (const b of solids()) if (x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && b[4] <= y + .6 && b[4] > s) s = b[4];
   for (const p of pieces.values()) {
-    for (const b of p.boxes) if (x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && b[4] <= y + .6 && b[4] > s) s = b[4];
     if (p.kind === "ramp" || p.kind === "cone") { const h = surfaceAt(p, x, z); if (h !== null && h <= y + .6 && h > s) s = h; }
   }
   return s;
 }
 function ceilingAt(x, y, z) {
   let c = Infinity;
-  for (const p of pieces.values()) for (const b of p.boxes) if (x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && b[1] >= y + HEAD - .3 && b[1] < c) c = b[1];
+  for (const b of solids()) if (x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && b[1] >= y + HEAD - .3 && b[1] < c) c = b[1];
   return c;
 }
 function physics(dt) {
@@ -290,7 +395,7 @@ function physics(dt) {
     const prevY = P.y; P.y += P.vy * h;
     const sup = supportAt(P.x, prevY, P.z), ceil = ceilingAt(P.x, prevY, P.z);
     if (P.vy > 0 && P.y + HEAD > ceil) { P.y = ceil - HEAD; P.vy = 0; }
-    if (P.y <= sup) { P.y = sup; P.vy = 0; P.ground = true; }
+    if (P.y <= sup) { if (P.vy < -16) hurt(Math.round((-P.vy - 16) * 6)); P.y = sup; P.vy = 0; P.ground = true; } // ~2 floors of fall starts to hurt
     else if (P.ground && P.vy <= 0 && prevY - sup < .7) { P.y = sup; P.vy = 0; } // stick to slopes walking down
     else P.ground = false;
   }
@@ -305,7 +410,7 @@ function wallOnEdge(cx, cz, d, j) {
   return d === 0 ? { kind: "wall", axis: "z", k: cx + 1, i: cz, j } : d === 2 ? { kind: "wall", axis: "z", k: cx, i: cz, j } : d === 1 ? { kind: "wall", axis: "x", k: cz + 1, i: cx, j } : { kind: "wall", axis: "x", k: cz, i: cx, j };
 }
 function target() { // which piece the current tool would place
-  const e = new V3(P.x, P.y + EYE, P.z), a = e.clone().addScaledVector(look(), 4.2), pcx = Math.floor(P.x / C), pcz = Math.floor(P.z / C);
+  const e = new V3(P.x, P.y + EYE, P.z), a = e.clone().addScaledVector(look(), 5.4), pcx = Math.floor(P.x / C), pcz = Math.floor(P.z / C);
   const cx = Math.floor(a.x / C), cz = Math.floor(a.z / C), d = facing(), base = Math.floor((P.y + .01) / C), up = P.pitch > .4 ? 1 : 0;
   if (tool === "wall") {
     const j = base + (P.pitch > .5 ? 1 : 0);
@@ -329,7 +434,7 @@ function updateGhost() {
     if (ghost) root.remove(ghost);
     ghost = null;
     if (t) {
-      t.removed = new Set(); const taken = pieces.has(keyOf(t));
+      t.removed = new Set(); const taken = pieces.has(keyOf(t)) || !supported(t);
       ghost = buildMesh(t, taken ? ghostBad : ghostMat); ghost.traverse(o => { o.castShadow = false; o.receiveShadow = false; o.userData = {}; }); ghost.userData.t = t; ghost.userData.taken = taken;
       root.add(ghost);
     }
@@ -343,6 +448,9 @@ function place() {
   if (t.j < 0) return;
   const probe = { ...t, removed: new Set() };
   if (boxesOf(probe).some(b => overlapsBox(P.x, P.y, P.z, b, .05))) return; // never trap the player inside a wall
+  if (!infinite && mats[mat] < COST) { if (!holding || !place.warned) flash(`Need ${COST} ${MATINFO[mat].name}`, "#ff7a6a"); place.warned = true; return; }
+  place.warned = false;
+  if (!infinite) mats[mat] -= COST;
   addPiece(t); ghost.userData.taken = true; ghost.traverse(o => o.material && (o.material = ghostBad));
   const h = (t.kind === "ramp" || t.kind === "cone") ? surfaceAt(t, P.x, P.z) : null;
   if (h !== null && h > P.y && h < P.y + HEAD) P.y = h; // building a ramp under yourself pops you up
@@ -358,13 +466,14 @@ function tileSlots(p) { // [geometry, x, y, z, idx] in the piece's mesh space
   if (p.kind === "wall") return [...Array(9)].map((_, n) => [bg(C / 3 * .94, C / 3 * .94, .34), (n % 3 - 1) * C / 3, ((n / 3 | 0) - 1) * C / 3, 0, n]);
   if (p.kind === "floor") return [...Array(4)].map((_, n) => [bg(C / 2 * .94, .3, C / 2 * .94), (n % 2 - .5) * C / 2, 0, ((n / 2 | 0) - .5) * C / 2, n]);
   if (p.kind === "ramp") return [...Array(4)].map((_, n) => [bg(C / 2 * .94, .3, RL / 2 * .94), (n % 2 - .5) * C / 2, .05, ((n / 2 | 0) - .5) * RL / 2, n]); // n: bit0 = local +x side, bit1 = high side
+  if (p.kind === "cone") return [...Array(4)].map((_, n) => [bg(C / 2 * .94, .3, C / 2 * .94), (n % 2 - .5) * C / 2, C / 4, ((n / 2 | 0) - .5) * C / 2, n]);
   return [];
 }
 function startEdit() {
   ray.setFromCamera(center, camera); ray.far = 7 + camDist;
   const hit = ray.intersectObjects(root.children.filter(o => o !== ghost && o !== drill?.mark), true)[0];
   const p = hit?.object.userData.piece;
-  if (!p || p.kind === "cone") return;
+  if (!p || p.dying) return;
   editing = { p, sel: new Set(p.kind === "ramp" ? [] : p.removed), tiles: [], paint: null, hover: null };
   const host = p.kind === "ramp" ? p.mesh.userData.slab : p.mesh;
   for (const [geo, x, y, z, n] of tileSlots(p)) { const m = new THREE.Mesh(geo, editing.sel.has(n) ? editSel : editMat); m.position.set(x, y, z); m.userData.tile = n; m.renderOrder = 5; host.add(m); editing.tiles.push(m); }
@@ -391,7 +500,7 @@ function confirmEdit() {
     const s = [...sel]; // selected pair = the side that becomes the high end
     const pairs = { "2,3": 0, "0,1": 2, "1,3": 3, "0,2": 1 }, k = s.sort().join(","), turn = pairs[k];
     if (turn !== undefined) { p.dir = (p.dir + turn) % 4; }
-  } else if (sel.size < (p.kind === "wall" ? 9 : 4)) p.removed = new Set(sel);
+  } else if (p.kind === "cone" || sel.size < (p.kind === "wall" ? 9 : 4)) p.removed = new Set(sel);
   endEdit(); rebuild(p); sfx(520, .05); sfx(780, .08);
   const [x, y, z] = [p.mesh.position.x, p.mesh.position.y, p.mesh.position.z];
   burst(x, y, z, MAT_COL[p.mat], 10);
@@ -399,6 +508,60 @@ function confirmEdit() {
 }
 function resetEdit() { const p = editing.p; p.removed = new Set(); endEdit(); rebuild(p); sfx(330, .08); drillCheck(p); }
 function endEdit() { const p = editing.p; editing = null; rebuild(p); hint(); }
+
+// ---------- pickaxe ----------
+let swingCd = 0, spotOn = null;
+function aimed(reach) { // nearest piece or prop under the crosshair
+  ray.setFromCamera(center, camera); ray.far = reach + camDist;
+  const hit = ray.intersectObjects([...root.children.filter(o => o !== ghost && o !== drill?.mark), ...props.map(o => o.mesh)], true)[0];
+  if (!hit) return null;
+  if (hit.object.userData.piece) return { piece: hit.object.userData.piece, point: hit.point };
+  let o = hit.object; while (o.parent && !props.some(q => q.mesh === o)) o = o.parent;
+  const prop = props.find(q => q.mesh === o); return prop ? { prop, point: hit.point } : null;
+}
+function moveSpot(o) { // weak spot sits on the side facing the player
+  const a = Math.atan2(P.z - o.z, P.x - o.x) + (Math.random() - .5) * 1.4, h = .5 + Math.random() * 1.3;
+  spot.position.set(o.x + Math.cos(a) * (o.rad + .05), h, o.z + Math.sin(a) * (o.rad + .05)); spot.visible = true; spotOn = o;
+}
+function gain(text, color) { const e = document.createElement("div"); e.className = "gain"; e.textContent = text; e.style.color = color; document.body.append(e); e.animate([{ transform: "translate(-50%,0)", opacity: 1 }, { transform: "translate(-50%,-50px)", opacity: 0 }], 900).onfinish = () => e.remove(); }
+function swing() {
+  if (swingCd > 0) return;
+  swingCd = .42; anims.push({ t: 0, d: .3, f: k => pick.rotation.x = -Math.sin(k * Math.PI) * 1.2 });
+  const t = aimed(4.5);
+  if (!t) return sfx(300, .05, "sine", .03);
+  if (t.piece) {
+    if (mode === "drill") return;
+    damagePiece(t.piece, 50); burst(t.point.x, t.point.y, t.point.z, MAT_COL[t.piece.mat], 4); sfx(160, .08, "square", .06);
+    return;
+  }
+  const o = t.prop, v = spot.position.clone().project(camera);
+  const crit = spotOn === o && spot.visible && Math.hypot(v.x * innerWidth / 2, v.y * innerHeight / 2) < 45;
+  const amt = Math.min(CAP - mats[o.mat], (crit ? 2 : 1) * [7, 6, 5][o.mat]);
+  if (!infinite && amt > 0) { mats[o.mat] += amt; gain(`+${amt} ${MATINFO[o.mat].name}${crit ? " ✦" : ""}`, crit ? "#6fd3ff" : "#fff"); }
+  o.hp -= crit ? 100 : 50;
+  burst(t.point.x, t.point.y, t.point.z, [0x8a5a2b, 0x9a958c, 0xb0b8c0][o.mat], crit ? 10 : 5);
+  sfx(crit ? 900 : 420, .07, "square", .05);
+  const m = o.mesh; anims.push({ t: 0, d: .2, f: k => m.rotation.z = Math.sin(k * Math.PI * 3) * .04 * (1 - k) });
+  if (o.hp <= 0) { props.splice(props.indexOf(o), 1); spot.visible = false; anims.push({ t: 0, d: .4, f: k => { m.scale.setScalar(1 - k); if (k >= 1) scene.remove(m); } }); sfx(90, .3, "sawtooth", .07); }
+  else moveSpot(o);
+}
+const pick = new THREE.Group(); // first-person pickaxe held at the bottom right
+{
+  const h = new THREE.Mesh(new THREE.CylinderGeometry(.03, .035, .8, 8), new THREE.MeshStandardMaterial({ color: 0x7a5230 })); h.position.y = .25;
+  const head = new THREE.Mesh(new THREE.BoxGeometry(.5, .07, .08), new THREE.MeshStandardMaterial({ color: 0x9aa4b2, metalness: .5, roughness: .4 })); head.position.y = .62;
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.05, .2, 6), head.material); tip.rotation.z = -Math.PI / 2; tip.position.set(.33, .62, 0);
+  const holder = new THREE.Group(); holder.add(h, head, tip); holder.rotation.set(.3, 0, .5); pick.add(holder);
+  pick.position.set(.42, -.55, -.7); camera.add(pick); scene.add(camera);
+}
+function hud() {
+  document.querySelectorAll("#mat .m").forEach((e, i) => { e.classList.toggle("on", i === mat); e.classList.toggle("low", !infinite && mats[i] < COST); e.querySelector("b").textContent = infinite ? "∞" : mats[i]; });
+  $("hpT").textContent = Math.ceil(P.hp); $("hpBar").style.width = P.hp + "%";
+  const t = mode !== "menu" && !editing ? aimed(tool === "pick" ? 4.5 : 7) : null, info = $("aimInfo");
+  let html = "";
+  if (t?.piece) html = `${MATINFO[t.piece.mat].name} ${t.piece.kind} · ${Math.ceil(t.piece.hp)}/${t.piece.max}<i style="width:${t.piece.hp / t.piece.max * 100}%"></i>`;
+  else if (t?.prop && tool === "pick") html = `${t.prop.kind[0].toUpperCase() + t.prop.kind.slice(1)} → ${MATINFO[t.prop.mat].name}<i style="width:${t.prop.hp / t.prop.max * 100}%"></i>`;
+  if (info.innerHTML !== html) info.innerHTML = html;
+}
 
 // ---------- effects / sound ----------
 const parts = [], partG = new THREE.BoxGeometry(.18, .18, .18), partM = {};
@@ -427,15 +590,16 @@ function resetWorld() {
   if (ring) { scene.remove(ring); ring = null; }
   if (drill?.mark) root.remove(drill.mark);
   drill = null; clock = 0; running = false; stats.built = stats.edits = 0;
-  Object.assign(P, { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true }); // facing +x
+  Object.assign(P, { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true, hp: 100 }); // facing +x
+  infinite = mode !== "free"; mats = [300, 150, 50]; makeProps(); spot.visible = false;
 }
 function startMode(m) {
   mode = m; resetWorld();
   if (m === "climb") {
     ring = new THREE.Group();
     const torus = new THREE.Mesh(new THREE.TorusGeometry(2.2, .22, 12, 48), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 44, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: .12, side: THREE.DoubleSide, depthWrite: false }));
-    beam.position.y = -22; ring.add(torus, beam); ring.position.set(10.5 * C, 10 * C + 2, .5 * C); scene.add(ring);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 10 * C + 4, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: .12, side: THREE.DoubleSide, depthWrite: false }));
+    beam.position.y = -(5 * C + 2); ring.add(torus, beam); ring.position.set(10.5 * C, 10 * C + 2, .5 * C); scene.add(ring);
   }
   if (m === "drill") {
     P.x = P.z = C / 2;
@@ -444,7 +608,7 @@ function startMode(m) {
     drill = { score: 0 }; newDrill();
   }
   ["menu", "pause", "done"].forEach(k => $(k).hidden = true);
-  ac ||= new AudioContext(); canvas.requestPointerLock?.(); hint();
+  ac ||= new AudioContext(); canvas.requestPointerLock()?.catch?.(() => {}); hint();
 }
 function newDrill() {
   if (drill.mark) root.remove(drill.mark);
@@ -497,7 +661,7 @@ function hint() {
     : mode === "drill" ? `Aim at the glowing wall, press ${k("edit")}, drag over the glowing tiles` : mode === "climb" ? `Hold click with the ramp (${k("ramp")}) and run forward. Walls (${k("wall")}) help.` : "";
 }
 function setTool(t) { tool = t; document.querySelectorAll(".slot").forEach(s => s.classList.toggle("on", s.dataset.t === t)); if (editing) endEdit(); sfx(440, .03); }
-function setMat(m) { mat = m; document.querySelectorAll("#mat i").forEach((e, i) => e.classList.toggle("on", i === m)); }
+function setMat(m) { mat = m; hud(); }
 
 // ---------- input ----------
 const locked = () => document.pointerLockElement === canvas;
@@ -516,12 +680,7 @@ addEventListener("mousedown", e => {
   if (e.button !== 0) return; // middle/side buttons: handled by trackButtons
   holding = true;
   if (editing) { editing.paint = null; paintTile(); return; }
-  if (tool === "pick") {
-    ray.setFromCamera(center, camera); ray.far = 6 + camDist;
-    const p = ray.intersectObjects(root.children.filter(o => o !== ghost && o !== drill?.mark), true)[0]?.object.userData.piece;
-    if (p && mode !== "drill") { removePiece(p); burst(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, MAT_COL[p.mat], 16); sfx(120, .12, "sawtooth", .06); lastGhostKey = ""; }
-    return;
-  }
+  if (tool === "pick") return swing();
   place();
 });
 addEventListener("mouseup", e => { if (e.button !== 0) return; holding = false; if (editing && editing.paint !== null) confirmEdit(); });
@@ -630,7 +789,11 @@ let last = performance.now(), bob = 0;
 renderer.setAnimationLoop(now => {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   const playing = ["free", "climb", "drill"].includes(mode) && locked();
-  if (playing) { physics(dt); modeTick(dt); }
+  if (playing) { physics(dt); modeTick(dt); swingCd -= dt; if (holding && tool === "pick") swing(); }
+  tickBuilding(dt);
+  pick.visible = SET.cam === "fp" && tool === "pick" && mode !== "menu";
+  if (spot.visible) spot.material.rotation += dt * 2;
+  if ((hud.t = (hud.t || 0) + dt) > .1) { hud.t = 0; hud(); }
   const moving = playing && P.ground && (held("forward") || held("back") || held("left") || held("right"));
   bob += moving ? dt * 11 : 0;
   camera.rotation.set(P.pitch, P.yaw, 0, "YXZ");
@@ -660,7 +823,11 @@ setTool("wall"); setMat(0); demoFort(); applySet(); labels(); showMenu();
 
 // self-checks: tile boxes, ramp surface ends, wall edge mapping
 console.assert(boxesOf({ kind: "wall", axis: "x", i: 0, j: 0, k: 0, removed: new Set([4]) }).length === 8, "wall tiles");
-console.assert(Math.abs(surfaceAt({ kind: "ramp", i: 0, j: 0, k: 0, dir: 0 }, 3.99, 2) - 4.13) < .05, "ramp top");
+console.assert(Math.abs(surfaceAt({ kind: "ramp", i: 0, j: 0, k: 0, dir: 0 }, C - .01, 2) - (C + .13)) < .05, "ramp top");
+const cone = sel => ({ kind: "cone", i: 0, j: 0, k: 0, removed: new Set(sel) });
+console.assert(Math.abs(surfaceAt(cone([]), C / 2, C / 2) - (C / 2 + .05)) < .01 && surfaceAt(cone([]), .01, .01) < .1, "cone peak/corner");
+console.assert(Math.abs(surfaceAt(cone([0, 1, 2, 3]), .3, 4.2) - (C / 2 + .05)) < .01, "flat cone");
+console.assert(Math.abs(surfaceAt(cone([0, 1]), 1, .2) - (C / 2 + .05)) < .01 && surfaceAt(cone([0, 1]), 2.5, 4.9) < .2, "half cone slope");
 console.assert(wallOnEdge(0, 0, 0, 0).k === 1 && wallOnEdge(0, 0, 3, 0).k === 0, "wall edges");
 </script>
 </body>
