@@ -52,9 +52,10 @@ main { max-width: 1100px; margin: auto; padding: 0 clamp(16px, 4vw, 32px) 80px; 
 .card { display: block; }
 .thumb {
   aspect-ratio: 4 / 3; border-radius: 16px; display: grid; place-items: center; font-size: 56px;
-  background-size: cover; background-position: center; transition: transform .25s ease;
+  background-size: cover; background-position: center; transition: transform .25s ease, box-shadow .25s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06);
 }
-.card:hover .thumb { transform: translateY(-4px); }
+.card:hover .thumb { transform: translateY(-4px); box-shadow: 0 16px 32px -14px rgba(0, 0, 0, .45); }
 .thumb span { transition: transform .25s ease; }
 .card:hover .thumb span { transform: scale(1.1); }
 .info { padding: 14px 2px 0; }
