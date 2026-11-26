@@ -526,6 +526,11 @@ addEventListener("mousedown", e => {
 });
 addEventListener("mouseup", e => { if (e.button !== 0) return void (keys["Mouse" + e.button] = false); holding = false; if (editing && editing.paint !== null) confirmEdit(); });
 addEventListener("contextmenu", e => e.preventDefault());
+// side buttons (3/4) trigger browser Back/Forward on release; block that so they work as bindable keys
+for (const t of ["mousedown", "mouseup", "auxclick", "pointerdown", "pointerup"]) addEventListener(t, e => { if (e.button === 1 || e.button === 3 || e.button === 4) e.preventDefault(); }, true);
+// fallback for browsers that navigate anyway: swallow the Back while a game or settings is open
+history.pushState({ br: 1 }, "", location.href);
+addEventListener("popstate", () => { if (mode !== "menu" || !$("settings").hidden) history.pushState({ br: 1 }, "", location.href); });
 function action(code) {
   for (const t of ["wall", "floor", "ramp", "cone", "pick"]) if (code === bind(t)) setTool(t);
   if (code === bind("mat")) setMat((mat + 1) % 3);
