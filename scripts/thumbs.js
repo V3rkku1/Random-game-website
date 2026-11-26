@@ -69,6 +69,14 @@ const setup = {
     });
     await p.waitForTimeout(800);
   },
+  "kings-last-stand": async p => {
+    await p.evaluate(() => {
+      start(); enemies.forEach(e => { scene.remove(e.mesh); scene.remove(e.tele); }); enemies = [];
+      [["q", [3, 4]], ["n", [5, 3]], ["r", [1, 5]], ["b", [6, 6]], ["p", [4, 2]], ["p", [2, 2]]].forEach(([t, sq]) => spawn(t, sq));
+      enemies.forEach(e => e.cd = 99); think(enemies[0]); player.z += 2; player.pitch = -.08; gunKick = .6; flash.visible = true;
+    });
+    await p.waitForTimeout(300);
+  },
   chess: async p => {
     await p.evaluate(() => {
       for (const m of ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+", "Nc3"]) lastMove = game.move(m);
