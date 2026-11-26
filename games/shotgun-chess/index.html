@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shotgun Chess</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --light: #f0d9b5; --dark: #b58863; --panel: #2a2b30; --text: #eeeef0; --muted: #9a9ca5; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap; padding: 16px;
+    background: radial-gradient(circle at 30% 20%, #2e3036, #151619 70%); color: var(--text); font: 500 15px Inter, system-ui, sans-serif; user-select: none;
+  }
+  #board {
+    --size: min(92vw, 86vh, 620px); --sq: calc(var(--size) / 8);
+    width: var(--size); height: var(--size); position: relative; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 30px 70px -20px #000d; touch-action: none; cursor: pointer;
+  }
+  #squares { display: grid; grid-template-columns: repeat(8, 1fr); height: 100%; }
+  .sq { position: relative; }
+  .sq.l { background: var(--light); } .sq.d { background: var(--dark); }
+  .sq.last::after, .sq.sel::after { content: ""; position: absolute; inset: 0; background: rgba(255, 214, 10, .4); }
+  .sq.sel::after { background: rgba(40, 130, 60, .45); }
+  .sq.check { background: radial-gradient(circle, #ff3b30, #ff3b3080 45%, transparent 75%), var(--c); }
+  .sq.l.check { --c: var(--light); } .sq.d.check { --c: var(--dark); }
+  .sq.move::before { content: ""; position: absolute; inset: 37%; border-radius: 50%; background: rgba(0, 0, 0, .22); z-index: 1; animation: dot .2s; }
+  .sq.cap::before { content: ""; position: absolute; inset: 3%; border-radius: 50%; border: calc(var(--sq) * .08) solid rgba(0, 0, 0, .22); z-index: 1; animation: dot .2s; }
+  .sq.shot::before { content: "🎯"; position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--sq) * .45); z-index: 3; animation: dot .2s; opacity: .85; }
+  .ammo { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); }
+  .ammo b { color: #ffb347; letter-spacing: 2px; }
+  .rules { color: var(--muted); font-size: 13px; line-height: 1.45; }
+  @keyframes dot { from { transform: scale(0); } }
+  .sq i { position: absolute; font: 600 calc(var(--sq) * .16) Inter, sans-serif; font-style: normal; opacity: .75; }
+  .sq i.r { top: 3px; left: 4px; } .sq i.f { bottom: 2px; right: 5px; }
+  .sq.l i { color: var(--dark); } .sq.d i { color: var(--light); }
+  #pieces { position: absolute; inset: 0; pointer-events: none; }
+  .pc {
+    position: absolute; left: 0; top: 0; width: var(--sq); height: var(--sq); display: grid; place-items: center;
+    font: calc(var(--sq) * .8) / 1 "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif;
+    transition: transform .24s cubic-bezier(.25, .9, .3, 1.08); z-index: 2;
+  }
+  .pc.w { color: #fbfbfb; -webkit-text-stroke: calc(var(--sq) * .022) #2b2b2b; paint-order: stroke fill; text-shadow: 0 3px 5px rgba(0, 0, 0, .35); }
+  .pc.b { color: #1f1f22; -webkit-text-stroke: calc(var(--sq) * .012) #000; text-shadow: 0 3px 5px rgba(0, 0, 0, .35); }
+  .pc.drag { transition: none; z-index: 5; filter: drop-shadow(0 10px 8px rgba(0, 0, 0, .35)); }
+  .pc.gone { animation: gone .25s forwards; }
+  @keyframes gone { to { opacity: 0; scale: .3; } }
+  #end {
+    position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0, 0, 0, .45); backdrop-filter: blur(3px);
+  }
+  #end[hidden] { display: none; }
+  #end div { background: var(--panel); padding: 24px 32px; border-radius: 16px; text-align: center; animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); }
+  #end h2 { margin: 0 0 6px; font-size: 28px; font-weight: 800; }
+  #end p { margin: 0 0 16px; color: var(--muted); }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  #side { width: min(92vw, 300px); display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border-radius: 14px; padding: 14px 16px; }
+  #status { font-weight: 600; font-size: 18px; }
+  #status.alert { color: #ff6b5e; }
+  .caps { min-height: 24px; font: 20px "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif; color: var(--muted); letter-spacing: -3px; }
+  .caps b { font: 600 13px Inter, sans-serif; letter-spacing: 0; margin-left: 8px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button {
+    font: 600 14px Inter, sans-serif; color: var(--text); background: #3a3b42; border: 0; border-radius: 10px; padding: 10px; cursor: pointer; transition: background .15s;
+  }
+  button:hover { background: #4a4b54; }
+  button.main { background: #f0d9b5; color: #222; } button.main:hover { background: #e3c79c; }
+  #moves { max-height: 180px; overflow: auto; display: grid; grid-template-columns: 32px 1fr 1fr; gap: 2px 8px; font-variant-numeric: tabular-nums; margin: 0; padding: 0; }
+  #moves span:nth-child(3n + 1) { color: var(--muted); }
+  #moves:empty::before { content: "No moves yet"; color: var(--muted); grid-column: 1 / -1; }
+  dialog { border: 0; border-radius: 16px; background: var(--panel); padding: 16px; }
+  dialog::backdrop { background: rgba(0, 0, 0, .5); }
+  dialog form { display: flex; gap: 8px; }
+  dialog button { font: 48px/1 "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif; width: 72px; height: 72px; padding: 0; background: var(--light); color: #222; }
+</style>
+</head>
+<body>
+<div id="board"><div id="squares"></div><div id="pieces"></div>
+  <div id="end" hidden><div><h2 id="endT"></h2><p id="endS"></p><button class="main" id="again">Play again</button></div></div>
+</div>
+<div id="side">
+  <div class="card"><div id="status"></div><div class="ammo"><span>White <b id="ammoW"></b></span><span>Black <b id="ammoB"></b></span></div></div>
+  <div class="card"><div class="caps" id="capB"></div><div class="caps" id="capW"></div></div>
+  <div class="btns">
+    <button id="undo">Undo</button><button id="flip">Flip board</button>
+    <button id="mode"></button><button class="main" id="new">New game</button>
+  </div>
+  <div class="card"><ol id="moves"></ol></div>
+  <div class="card rules">Each side has 2 shotgun shells. Select a piece: 🎯 marks enemies within 2 squares. Click one to blast it instead of moving. Kings are bulletproof. You may shoot your way out of check.</div>
+</div>
+<dialog id="promo"><form method="dialog">
+  <button value="q">♛</button><button value="r">♜</button><button value="b">♝</button><button value="n">♞</button>
+</form></dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+// Chess + shotgun: chess.js does the rules; a shot = remove piece and pass the turn via FEN.
+// Skipped: shots inside AI search tree (only considered at root), threefold detection across shots/undo.
+const game = new Chess(), FILES = "abcdefgh", SHELLS = 2;
+const G = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" }, VS = "︎";
+let flipped = false, ai = true, sel = null, busy = false, lastMove = null, drag = null, ac;
+let shells = { w: SHELLS, b: SHELLS }, log = [], stack = [];
+const $ = id => document.getElementById(id);
+const board = $("board"), pieces = $("pieces");
+
+// ---------- geometry ----------
+function cell(sq) {
+  const f = FILES.indexOf(sq[0]), r = +sq[1];
+  return flipped ? [7 - f, r - 1] : [f, 8 - r];
+}
+const tf = sq => { const [c, r] = cell(sq); return `translate(${c * 100}%, ${r * 100}%)`; };
+function sqAt(e) {
+  const b = board.getBoundingClientRect(), c = Math.floor((e.clientX - b.left) / b.width * 8), r = Math.floor((e.clientY - b.top) / b.height * 8);
+  if (c < 0 || r < 0 || c > 7 || r > 7) return null;
+  return flipped ? FILES[7 - c] + (r + 1) : FILES[c] + (8 - r);
+}
+const el = sq => pieces.querySelector(`[data-sq="${sq}"]`);
+const ALL = [...FILES].flatMap(f => [1, 2, 3, 4, 5, 6, 7, 8].map(r => f + r));
+
+// ---------- shotgun ----------
+const ROOK_RIGHT = { a1: "Q", h1: "K", a8: "q", h8: "k" };
+function shotFen(to) { // FEN after current side blasts `to`, or null if that leaves own king in check
+  const t = new Chess(game.fen()), [, me, cas0, , , full] = game.fen().split(" ");
+  t.remove(to);
+  const b = t.fen().split(" ")[0], cas = cas0.replace(ROOK_RIGHT[to] || "_", "") || "-";
+  if (new Chess(`${b} ${me} ${cas} - 0 ${full}`).in_check()) return null;
+  return `${b} ${me === "w" ? "b" : "w"} ${cas} - 0 ${+full + (me === "b")}`;
+}
+function shotTargets(from) {
+  const me = game.turn(), p = game.get(from);
+  if (!shells[me] || !p || p.color !== me) return [];
+  const legal = game.moves({ square: from, verbose: true }).map(m => m.to);
+  return ALL.filter(sq => {
+    const t = game.get(sq);
+    return t && t.color !== me && t.type !== "k" && !legal.includes(sq)
+      && Math.max(Math.abs(sq.charCodeAt(0) - from.charCodeAt(0)), Math.abs(sq[1] - from[1])) <= 2 && shotFen(sq);
+  });
+}
+const allShots = () => ALL.flatMap(from => shotTargets(from).map(to => ({ from, to })));
+function result() {
+  if (!game.moves().length && !allShots().length) return game.in_check() ? "Checkmate" : "Stalemate";
+  if (game.insufficient_material()) return "Insufficient material";
+  if (game.in_threefold_repetition()) return "Threefold repetition";
+  if (game.in_draw()) return "50-move rule";
+}
+
+// ---------- rendering ----------
+function sync() {
+  pieces.innerHTML = "";
+  game.board().forEach((row, i) => row.forEach((p, j) => {
+    if (!p) return;
+    const s = document.createElement("span"), sq = FILES[j] + (8 - i);
+    s.className = "pc " + p.color; s.textContent = G[p.type] + VS; s.dataset.sq = sq; s.style.transform = tf(sq);
+    pieces.append(s);
+  }));
+}
+function render() {
+  const targets = sel ? game.moves({ square: sel, verbose: true }) : [], shots = sel ? shotTargets(sel) : [];
+  const check = game.in_check() && kingSq(game.turn());
+  let html = "";
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const f = flipped ? 7 - c : c, rk = flipped ? r + 1 : 8 - r, sq = FILES[f] + rk, t = targets.find(m => m.to === sq);
+    const cls = ["sq", (f + rk) % 2 ? "d" : "l", lastMove && (sq === lastMove.from || sq === lastMove.to) && "last", sq === sel && "sel",
+      t && (t.captured ? "cap" : "move"), shots.includes(sq) && "shot", sq === check && "check"].filter(Boolean).join(" ");
+    html += `<div class="${cls}">${c === 0 ? `<i class="r">${rk}</i>` : ""}${r === 7 ? `<i class="f">${FILES[f]}</i>` : ""}</div>`;
+  }
+  $("squares").innerHTML = html;
+
+  const end = result(), turn = game.turn() === "w" ? "White" : "Black";
+  $("status").textContent = busy ? "Computer is thinking…" : `${turn} to move${game.in_check() ? " · Check!" : ""}`;
+  $("status").className = game.in_check() ? "alert" : "";
+  $("mode").textContent = ai ? "Vs computer" : "Two players";
+  $("ammoW").textContent = "▮".repeat(shells.w) || "empty";
+  $("ammoB").textContent = "▮".repeat(shells.b) || "empty";
+
+  // captured = starting material minus what's on board (promotions clamp at 0)
+  const val = { p: 1, n: 3, b: 3, r: 5, q: 9 }, start = { q: 1, r: 2, b: 2, n: 2, p: 8 }, cnt = { w: {}, b: {} };
+  game.board().flat().forEach(p => p && (cnt[p.color][p.type] = (cnt[p.color][p.type] || 0) + 1));
+  const lost = c => Object.keys(start).flatMap(t => Array(Math.max(0, start[t] - (cnt[c][t] || 0))).fill(t));
+  const tw = lost("b"), tb = lost("w"), diff = tw.reduce((s, p) => s + val[p], 0) - tb.reduce((s, p) => s + val[p], 0);
+  $("capW").innerHTML = tw.map(p => G[p] + VS).join("") + (diff > 0 ? `<b>+${diff}</b>` : "");
+  $("capB").innerHTML = tb.map(p => G[p] + VS).join("") + (diff < 0 ? `<b>+${-diff}</b>` : "");
+  $("moves").innerHTML = log.map((m, i) => (i % 2 ? "" : `<span>${i / 2 + 1}.</span>`) + `<span>${m}</span>`).join("");
+  $("moves").scrollTop = 1e9;
+
+  if (end) {
+    $("endT").textContent = end === "Checkmate" ? `${game.turn() === "w" ? "Black" : "White"} wins` : "Draw";
+    $("endS").textContent = end;
+    $("status").textContent = `${$("endT").textContent} · ${end}`;
+  }
+  $("end").hidden = !end;
+}
+function kingSq(c) { return ALL.find(sq => { const p = game.get(sq); return p && p.type === "k" && p.color === c; }); }
+
+// ---------- actions ----------
+function animate(m) {
+  const cap = m.flags.includes("e") ? m.to[0] + m.from[1] : m.to, rank = m.from[1];
+  if (m.captured) el(cap)?.classList.add("gone");
+  const p = el(m.from);
+  if (p) { p.dataset.sq = ""; p.style.transform = tf(m.to); if (m.promotion) p.textContent = G[m.promotion] + VS; }
+  if (m.flags.includes("k")) el("h" + rank).style.transform = tf("f" + rank);
+  if (m.flags.includes("q")) el("a" + rank).style.transform = tf("d" + rank);
+  setTimeout(sync, 260);
+}
+function tone(f, cap) {
+  ac ||= new AudioContext();
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = "triangle"; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * .6, t + .08);
+  g.gain.setValueAtTime(cap ? .25 : .15, t); g.gain.exponentialRampToValueAtTime(.001, t + .1);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + .1);
+}
+function boom() { // white-noise blast + board kick
+  ac ||= new AudioContext();
+  const n = ac.sampleRate * .4, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
+  const s = ac.createBufferSource(), lp = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = buf; lp.frequency.value = 1400; g.gain.value = .6;
+  s.connect(lp).connect(g).connect(ac.destination); s.start();
+  board.animate([{ transform: "translate(0,0)", filter: "brightness(1.6)" }, { transform: "translate(-8px,4px)" }, { transform: "translate(6px,-5px)" },
+    { transform: "translate(-3px,2px)" }, { transform: "translate(0,0)", filter: "brightness(1)" }], 300);
+}
+const save = () => stack.push({ fen: game.fen(), log: [...log], shells: { ...shells }, lastMove });
+function next() {
+  sel = null;
+  if (ai && game.turn() === "b" && !result()) { busy = true; setTimeout(aiMove, 350); }
+  render();
+}
+function after(m) {
+  log.push(m.san); lastMove = m; animate(m); tone(game.in_check() ? 660 : m.captured ? 180 : 260, m.captured); next();
+}
+function shoot(from, to) {
+  const s = game.get(from);
+  save(); game.load(shotFen(to)); shells[s.color]--;
+  log.push(`${s.type === "p" ? "" : s.type.toUpperCase()}${from}🔫${to}${game.in_check() ? "+" : ""}`);
+  lastMove = { from, to }; el(to)?.classList.add("gone"); boom(); setTimeout(sync, 260); next();
+}
+const pickPromo = () => new Promise(res => { $("promo").returnValue = ""; $("promo").onclose = () => res($("promo").returnValue || null); $("promo").showModal(); });
+async function tryMove(from, to) {
+  if (shotTargets(from).includes(to)) return shoot(from, to), true;
+  const opts = game.moves({ square: from, verbose: true }).filter(m => m.to === to);
+  if (!opts.length) return false;
+  const promotion = opts[0].flags.includes("p") ? await pickPromo() : undefined;
+  if (promotion === null) return false;
+  save(); after(game.move({ from, to, promotion }));
+  return true;
+}
+
+// ---------- AI: alpha-beta; shots evaluated at root only, each shell costs SHELL_COST ----------
+const VAL = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 }, DEPTH = 3, SHELL_COST = 150;
+function evaluate() {
+  let s = 0;
+  game.board().forEach((row, i) => row.forEach((p, j) => {
+    if (!p) return;
+    const centre = 7 - Math.abs(j - 3.5) - Math.abs(i - 3.5);
+    const v = VAL[p.type] + (p.type === "p" ? (p.color === "w" ? 6 - i : i - 1) * 8 : 0) + (p.type === "k" ? 0 : centre * (p.type === "n" || p.type === "p" ? 5 : 2));
+    s += p.color === "b" ? v : -v;
+  }));
+  return s;
+}
+function search(depth, a, b, max) {
+  if (depth === 0) return evaluate();
+  const ms = game.moves();
+  if (!ms.length) return game.in_checkmate() ? (max ? -1e5 - depth : 1e5 + depth) : 0;
+  ms.sort((x, y) => y.includes("x") - x.includes("x"));
+  for (const m of ms) {
+    game.move(m); const v = search(depth - 1, a, b, !max); game.undo();
+    if (max) a = Math.max(a, v); else b = Math.min(b, v);
+    if (a >= b) break;
+  }
+  return max ? a : b;
+}
+function aiMove() {
+  let bestV = -Infinity, best;
+  for (const m of game.moves().sort(() => Math.random() - .5)) {
+    game.move(m); const v = search(DEPTH - 1, bestV, Infinity, false); game.undo();
+    if (v > bestV) { bestV = v; best = m; }
+  }
+  const fen = game.fen(); let shot;
+  for (const s of allShots()) {
+    game.load(shotFen(s.to)); const v = search(DEPTH - 1, bestV + SHELL_COST, Infinity, false) - SHELL_COST; game.load(fen);
+    if (v > bestV) { bestV = v; shot = s; }
+  }
+  busy = false;
+  if (shot) shoot(shot.from, shot.to); else { save(); after(game.move(best)); }
+}
+
+// ---------- input ----------
+board.addEventListener("pointerdown", e => {
+  if (busy || drag || result() || (ai && game.turn() === "b") || $("promo").open) return;
+  const sq = sqAt(e); if (!sq) return;
+  if (sel && sel !== sq && (game.moves({ square: sel, verbose: true }).some(m => m.to === sq) || shotTargets(sel).includes(sq))) return tryMove(sel, sq);
+  const p = game.get(sq);
+  if (!p || p.color !== game.turn()) { sel = null; return render(); }
+  sel = sq; render();
+  drag = { sq, el: el(sq) }; drag.el.classList.add("drag"); follow(e);
+  board.setPointerCapture(e.pointerId);
+});
+function follow(e) {
+  const b = board.getBoundingClientRect(), s = b.width / 8;
+  drag.el.style.transform = `translate(${e.clientX - b.left - s / 2}px, ${e.clientY - b.top - s / 2}px) scale(1.15)`;
+}
+board.addEventListener("pointermove", e => drag && follow(e));
+board.addEventListener("pointerup", async e => {
+  if (!drag) return;
+  const d = drag, to = sqAt(e); drag = null;
+  d.el.classList.remove("drag");
+  if (!to || to === d.sq || !(await tryMove(d.sq, to))) d.el.style.transform = tf(d.sq);
+});
+
+function restore(s) { game.load(s.fen); log = s.log; shells = s.shells; lastMove = s.lastMove; }
+$("undo").onclick = () => {
+  if (busy || !stack.length) return;
+  restore(stack.pop()); if (ai && game.turn() === "b" && stack.length) restore(stack.pop());
+  sel = null; sync(); render();
+};
+$("flip").onclick = () => { flipped = !flipped; sync(); render(); };
+$("mode").onclick = () => { ai = !ai; next(); };
+$("new").onclick = $("again").onclick = () => {
+  if (busy) return;
+  game.reset(); lastMove = sel = null; log = []; stack = []; shells = { w: SHELLS, b: SHELLS }; sync(); render();
+};
+sync(); render();
+</script>
+</body>
+</html>
