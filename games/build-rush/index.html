@@ -28,6 +28,11 @@
   #aimInfo { position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); font-size: 12px; background: #0008; padding: 4px 10px; border-radius: 8px; white-space: nowrap; pointer-events: none; }
   #aimInfo:empty { display: none; }
   #aimInfo i { display: block; height: 4px; margin-top: 3px; border-radius: 2px; background: #4cd964; }
+  #steps { position: fixed; left: 16px; top: 34%; background: #000a; border-radius: 14px; padding: 12px 14px; min-width: 210px; }
+  #steps b { display: block; margin-bottom: 6px; color: #ffd166; }
+  #steps div { padding: 5px 8px; border-radius: 8px; opacity: .5; font-size: 13px; }
+  #steps div.on { opacity: 1; background: #ffd16633; outline: 2px solid #ffd166; }
+  #steps div.done { opacity: .8; color: #7ee08a; }
   #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px #ff2020; opacity: 0; transition: opacity .5s; }
   .gain { position: fixed; left: 50%; top: 46%; font: 800 18px Inter, sans-serif; pointer-events: none; text-shadow: 0 2px 6px #000a; }
   #top { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
@@ -74,6 +79,7 @@
 <div id="hint"></div>
 <div id="flash"></div>
 <div id="aimInfo"></div>
+<div id="steps" hidden></div>
 <div id="hurt"></div>
 <div id="hp"><span>Health <b id="hpT">100</b></span><div><i id="hpBar" style="width:100%"></i></div></div>
 <div id="hot">
@@ -92,6 +98,7 @@
     <button class="mode" data-m="free"><b>🏗️ Free Build</b><span>Pickaxe trees, rocks and cars for mats. Build, edit, break.</span></button>
     <button class="mode" data-m="climb"><b>🚀 Climb</b><span>Reach the ring 10 floors up. Ramp rush as fast as you can.</span><em id="bestClimb"></em></button>
     <button class="mode" data-m="drill"><b>✂️ Edit Drill</b><span>Copy the glowing edit on your walls. 60 seconds.</span><em id="bestDrill"></em></button>
+    <button class="mode" data-m="nines"><b>🔄 90s Trainer</b><span>Step-by-step 90s: ramp, wall, jump, floor, turn. Reach floor 8.</span><em id="bestNines"></em></button>
   </div>
   <div class="keys" id="keyList"></div>
   <button class="btn ghost" id="openSet1" style="margin-top:16px">⚙️ Settings</button>
@@ -109,6 +116,7 @@
     <label>Field of view <input type="range" id="sFov" min="60" max="110" step="1"><output id="oFov"></output></label>
     <label>Camera <select id="sCam"><option value="tp">Third person</option><option value="fp">First person</option></select></label>
     <label><input type="checkbox" id="sInv"> Invert mouse Y</label>
+    <label><input type="checkbox" id="sInf"> Infinite mats in Free Build</label>
   </div>
   <h3>Keybinds <small>click one, then press a key or mouse button 3–5 · Esc cancels</small></h3>
   <div class="binds" id="binds"></div>
@@ -294,7 +302,7 @@ function collapse() { // anything no longer chained to the ground falls
 // ---------- settings & keybinds (saved in localStorage) ----------
 const ACTIONS = { forward: ["Move forward", "KeyW"], back: ["Move back", "KeyS"], left: ["Move left", "KeyA"], right: ["Move right", "KeyD"], jump: ["Jump", "Space"], sprint: ["Sprint", "ShiftLeft"],
   wall: ["Wall", "KeyQ"], floor: ["Floor", "KeyF"], ramp: ["Ramp", "KeyC"], cone: ["Cone", "KeyV"], pick: ["Pickaxe", "KeyE"], edit: ["Edit", "KeyG"], mat: ["Material", "KeyT"], cam: ["Switch camera", "KeyP"] };
-const SET = { sens: 1, fov: 78, cam: "tp", inv: false, bind: {} };
+const SET = { sens: 1, fov: 78, cam: "tp", inv: false, infFree: true, bind: {} };
 try { Object.assign(SET, JSON.parse(store("brSet") || "{}")); } catch {}
 const saveSet = () => store("brSet", JSON.stringify(SET));
 const bind = a => SET.bind[a] || ACTIONS[a][1];
@@ -318,7 +326,7 @@ function labels() {
 function applySet() {
   camera.fov = SET.fov; camera.updateProjectionMatrix();
   $("sSens").value = SET.sens; $("oSens").textContent = (+SET.sens).toFixed(2); $("sFov").value = SET.fov; $("oFov").textContent = SET.fov;
-  $("sCam").value = SET.cam; $("sInv").checked = SET.inv;
+  $("sCam").value = SET.cam; $("sInv").checked = SET.inv; $("sInf").checked = SET.infFree;
 }
 function openSettings(from) { setFrom = from; $(from).hidden = true; $("settings").hidden = false; applySet(); labels(); }
 
@@ -364,6 +372,7 @@ function blocked(x, y, z) {
   }
   return false;
 }
+const hitsWall = (x, y, z) => [...pieces.values()].some(p => p.kind === "wall" && p.boxes.some(b => overlapsBox(x, y, z, b)));
 function supportAt(x, y, z) { // highest walkable surface at or a little above the feet
   let s = 0;
   for (const b of solids()) if (x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && b[4] <= y + .6 && b[4] > s) s = b[4];
@@ -382,14 +391,14 @@ function physics(dt) {
   const sp = held("sprint") ? 8.5 : 6, sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
   let mx = (-sy * f + cy * s), mz = (-cy * f - sy * s); const ml = Math.hypot(mx, mz) || 1;
   mx = mx / ml * sp * (f || s ? 1 : 0); mz = mz / ml * sp * (f || s ? 1 : 0);
-  if (held("jump") && P.ground) { P.vy = 8.2; P.ground = false; }
+  if (held("jump") && P.ground) { P.vy = 8.8; P.ground = false; }
   const steps = 4, h = dt / steps;
   for (let i = 0; i < steps; i++) {
     for (const [ax, d] of [["x", mx * h], ["z", mz * h]]) {
       if (!d) continue;
       const nx = ax === "x" ? P.x + d : P.x, nz = ax === "z" ? P.z + d : P.z;
       if (!blocked(nx, P.y, nz)) { P.x = nx; P.z = nz; }
-      else if (P.ground && !blocked(nx, P.y + .45, nz)) { P.x = nx; P.z = nz; P.y += .45; } // step up small ledges
+      else if (P.ground && !hitsWall(nx, P.y, nz) && !blocked(nx, P.y + .45, nz)) { P.x = nx; P.z = nz; P.y += .45; } // step up small ledges, never over a wall
     }
     P.vy -= 24 * h;
     const prevY = P.y; P.y += P.vy * h;
@@ -419,6 +428,11 @@ function target() { // which piece the current tool would place
     return wallOnEdge(cx, cz, Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? 2 : 0) : (dz > 0 ? 3 : 1), j);
   }
   let j = base + up;
+  if (P.pitch < -.5) { // looking down: build in your own tile at your feet level (90s, ramp/floor under yourself)
+    if (tool === "floor") return { kind: "floor", i: pcx, j: base, k: pcz };
+    if (tool === "ramp") return { kind: "ramp", i: pcx, j: base, k: pcz, dir: d };
+    if (tool === "cone") return { kind: "cone", i: pcx, j: base, k: pcz };
+  }
   const r = standingRamp(); // ramp rush: the cell past the ramp's high end builds one level up
   if (r && cx === r.i + DIRS[r.dir][0] && cz === r.k + DIRS[r.dir][1]) j = r.j + 1;
   if (tool === "floor") return { kind: "floor", i: cx, j, k: cz };
@@ -453,9 +467,9 @@ function place() {
   if (!infinite) mats[mat] -= COST;
   addPiece(t); ghost.userData.taken = true; ghost.traverse(o => o.material && (o.material = ghostBad));
   const h = (t.kind === "ramp" || t.kind === "cone") ? surfaceAt(t, P.x, P.z) : null;
-  if (h !== null && h > P.y && h < P.y + HEAD) P.y = h; // building a ramp under yourself pops you up
+  if (h !== null && h > P.y - .1 && h - P.y < C + .5) { P.y = h; P.vy = Math.max(P.vy, 0); } // a ramp/cone built in your own tile lifts you onto it
   sfx(220 + Math.random() * 40, .06, "square", .05); sfx(140, .08, "triangle", .08);
-  stats.built++;
+  stats.built++; ninesStep({ piece: t.kind });
 }
 
 // ---------- editing ----------
@@ -581,6 +595,25 @@ function sfx(f, d, type = "triangle", vol = .06) {
 }
 function flash(t, c = "#fff") { const e = $("flash"); e.textContent = t; e.style.color = c; e.classList.remove("go"); void e.offsetWidth; e.classList.add("go"); }
 
+// ---------- 90s trainer: ramp (look down) -> turn 90 -> wall -> jump -> floor (look down) -> repeat ----------
+let nines = null;
+const STEPS = [{ t: "Ramp · look down", piece: "ramp", tool: "ramp" }, { t: "Wall in front", piece: "wall", tool: "wall" }, { t: "Run up to the wall, jump", jump: 1 }, { t: "Floor · look down", piece: "floor", tool: "floor" }, { t: "Turn 90° left or right", turn: 1 }];
+function ninesUi() {
+  const k = a => keyName(bind(a));
+  $("steps").innerHTML = `<b>90s · done ${nines.loops}</b>` + STEPS.map((s, i) => `<div class="${i === nines.step ? "on" : i < nines.step ? "done" : ""}">${i + 1}. ${s.t}${s.tool ? ` <kbd>${k(s.tool)}</kbd>` : s.jump ? ` <kbd>${k("jump")}</kbd>` : ""}</div>`).join("");
+}
+function ninesStep(ev) {
+  if (mode !== "nines") return;
+  const s = STEPS[nines.step];
+  if (!running && ev.piece) { running = true; clock = 0; }
+  if ((s.piece && ev.piece === s.piece) || (s.turn && ev.turn) || (s.jump && ev.jump)) {
+    nines.step = (nines.step + 1) % STEPS.length;
+    if (nines.step === 0) { nines.loops++; flash(`90 #${nines.loops}`, "#ffd166"); sfx(880, .08); }
+    if (STEPS[nines.step].turn) nines.yaw0 = P.yaw;
+    ninesUi(); sfx(660, .04);
+  }
+}
+
 // ---------- modes ----------
 const stats = { built: 0, edits: 0 };
 let ring = null, clock = 0, running = false, drill = null;
@@ -589,9 +622,11 @@ function resetWorld() {
   clearAll(); editing = null; if (ghost) root.remove(ghost); ghost = null; lastGhostKey = "";
   if (ring) { scene.remove(ring); ring = null; }
   if (drill?.mark) root.remove(drill.mark);
+  if (nines?.zone) root.remove(nines.zone);
+  nines = null; $("steps").hidden = true;
   drill = null; clock = 0; running = false; stats.built = stats.edits = 0;
   Object.assign(P, { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true, hp: 100 }); // facing +x
-  infinite = mode !== "free"; mats = [300, 150, 50]; makeProps(); spot.visible = false;
+  infinite = mode !== "free" || SET.infFree; mats = [300, 150, 50]; makeProps(); spot.visible = false;
 }
 function startMode(m) {
   mode = m; resetWorld();
@@ -606,6 +641,11 @@ function startMode(m) {
     for (let d = 0; d < 4; d++) addPiece({ ...wallOnEdge(0, 0, d, 0), mat: 1 }, false);
     addPiece({ kind: "floor", i: 0, j: 1, k: 0, mat: 1 }, false);
     drill = { score: 0 }; newDrill();
+  }
+  $("steps").hidden = m !== "nines";
+  if (m === "nines") {
+    nines = { step: 0, loops: 0, yaw0: P.yaw, zone: new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-1, -1], [2, -1], [2, 2], [-1, 2]].map(([x, z]) => new V3(x * C, .05, z * C))), new THREE.LineBasicMaterial({ color: 0xffd166 })) };
+    P.x = P.z = C / 2; root.add(nines.zone); ninesUi();
   }
   ["menu", "pause", "done"].forEach(k => $(k).hidden = true);
   ac ||= new AudioContext(); canvas.requestPointerLock()?.catch?.(() => {}); hint();
@@ -651,6 +691,16 @@ function modeTick(dt) {
     if (drill.mark) for (const m of drill.mark.children) m.material.opacity = .3 + Math.sin(performance.now() / 150) * .15;
     top.push(running ? `⏱ <b>${Math.ceil(clock)}s</b>` : "Edit the glowing wall to start", `Score <b>${drill.score}</b>`);
     const best = store("brDrill"); if (best) top.push(`Best ${best}`);
+  } else if (mode === "nines") {
+    if (running) clock += dt;
+    const dy = Math.atan2(Math.sin(P.yaw - nines.yaw0), Math.cos(P.yaw - nines.yaw0));
+    if (STEPS[nines.step].turn && Math.abs(dy) > 1.1) ninesStep({ turn: 1 });
+    if (STEPS[nines.step].jump && !P.ground && P.vy > 0) ninesStep({ jump: 1 });
+    const lv = Math.floor((P.y + .01) / C), out = P.x < -C || P.x > 2 * C || P.z < -C || P.z > 2 * C;
+    top.push(`⏱ <b>${clock.toFixed(2)}s</b>`, `Floor <b>${lv}</b>/8`);
+    if (out) top.push(`<b style="color:#ff7a6a">Stay inside the yellow 3×3 zone</b>`);
+    const best = +store("brNines"); if (best) top.push(`Best ${best.toFixed(2)}s`);
+    if (lv >= 8 && !out) { const isBest = !best || clock < best; if (isBest) store("brNines", clock); finish("Floor 8 reached", clock.toFixed(2) + "s", `${nines.loops} full 90s · ${isBest ? "New best!" : "Best " + best.toFixed(2) + "s"}`); }
   } else if (mode === "free") top.push(`Built <b>${stats.built}</b>`, `Edits <b>${stats.edits}</b>`);
   const html = top.map(t => `<span class="pill">${t}</span>`).join("");
   if ($("top").innerHTML !== html) $("top").innerHTML = html;
@@ -658,16 +708,16 @@ function modeTick(dt) {
 function hint() {
   const k = a => keyName(bind(a));
   $("hint").textContent = editing ? `EDIT · click/drag tiles · release to confirm · right-click reset · ${k("edit")} cancel`
-    : mode === "drill" ? `Aim at the glowing wall, press ${k("edit")}, drag over the glowing tiles` : mode === "climb" ? `Hold click with the ramp (${k("ramp")}) and run forward. Walls (${k("wall")}) help.` : "";
+    : mode === "drill" ? `Aim at the glowing wall, press ${k("edit")}, drag over the glowing tiles` : mode === "nines" ? `Look DOWN to put floors and ramps in your own tile · follow the steps on the left` : mode === "climb" ? `Hold click with the ramp (${k("ramp")}) and run forward. Walls (${k("wall")}) help.` : "";
 }
 function setTool(t) { tool = t; document.querySelectorAll(".slot").forEach(s => s.classList.toggle("on", s.dataset.t === t)); if (editing) endEdit(); sfx(440, .03); }
 function setMat(m) { mat = m; hud(); }
 
 // ---------- input ----------
 const locked = () => document.pointerLockElement === canvas;
-canvas.addEventListener("click", () => { if (!locked() && (mode === "free" || mode === "climb" || mode === "drill")) canvas.requestPointerLock(); });
+canvas.addEventListener("click", () => { if (!locked() && (["free", "climb", "drill", "nines"].includes(mode))) canvas.requestPointerLock(); });
 document.addEventListener("pointerlockchange", () => {
-  if (!locked() && ["free", "climb", "drill"].includes(mode) && $("done").hidden) { $("pause").hidden = false; holding = false; $("pauseSub").textContent = { free: "Free Build", climb: "Climb", drill: "Edit Drill" }[mode]; }
+  if (!locked() && ["free", "climb", "drill", "nines"].includes(mode) && $("done").hidden) { $("pause").hidden = false; holding = false; $("pauseSub").textContent = { free: "Free Build", climb: "Climb", drill: "Edit Drill", nines: "90s Trainer" }[mode]; }
 });
 addEventListener("mousemove", e => {
   if (!locked()) return;
@@ -726,6 +776,7 @@ $("sSens").oninput = e => { SET.sens = +e.target.value; saveSet(); applySet(); }
 $("sFov").oninput = e => { SET.fov = +e.target.value; saveSet(); applySet(); };
 $("sCam").onchange = e => { SET.cam = e.target.value; saveSet(); };
 $("sInv").onchange = e => { SET.inv = e.target.checked; saveSet(); };
+$("sInf").onchange = e => { SET.infFree = e.target.checked; saveSet(); if (mode === "free") infinite = SET.infFree; };
 $("openSet1").onclick = () => openSettings("menu");
 $("openSet2").onclick = () => openSettings("pause");
 $("setDone").onclick = () => { capturing = null; $("settings").hidden = true; $(setFrom).hidden = false; };
@@ -738,7 +789,8 @@ $("again").onclick = () => startMode(mode.replace("-done", ""));
 $("toMenu").onclick = $("toMenu2").onclick = showMenu;
 function showMenu() {
   mode = "menu"; ["pause", "done"].forEach(k => $(k).hidden = true); $("menu").hidden = false;
-  const c = +store("brClimb"), d = store("brDrill");
+  const c = +store("brClimb"), d = store("brDrill"), n = +store("brNines");
+  $("bestNines").textContent = n ? `Best ${n.toFixed(2)}s` : "";
   $("bestClimb").textContent = c ? `Best ${c.toFixed(2)}s` : ""; $("bestDrill").textContent = d ? `Best ${d}` : "";
 }
 if (matchMedia("(pointer: coarse)").matches) $("touchNote").hidden = false;
@@ -788,7 +840,7 @@ addEventListener("resize", resize); resize();
 let last = performance.now(), bob = 0;
 renderer.setAnimationLoop(now => {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
-  const playing = ["free", "climb", "drill"].includes(mode) && locked();
+  const playing = ["free", "climb", "drill", "nines"].includes(mode) && locked();
   if (playing) { physics(dt); modeTick(dt); swingCd -= dt; if (holding && tool === "pick") swing(); }
   tickBuilding(dt);
   pick.visible = SET.cam === "fp" && tool === "pick" && mode !== "menu";
