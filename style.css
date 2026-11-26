@@ -71,5 +71,10 @@ footer { max-width: 1100px; margin: auto; color: var(--muted); padding: 32px cla
 .player .frame-wrap { flex: 1; padding: 0 clamp(16px, 4vw, 32px) 20px; display: flex; }
 .player iframe { flex: 1; border: 1px solid var(--border); border-radius: 16px; background: #000; }
 .player .btn { padding: 8px 16px; font-size: 14px; }
+.player .home { font-weight: 600; }
+.player nav strong { flex: 1; text-align: center; }
+.player nav .btn { white-space: nowrap; }
+.player nav div { display: flex; gap: 8px; }
+@media (max-width: 520px) { .player nav strong { display: none; } }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
