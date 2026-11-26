@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Random Games Arcade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <div class="blob a"></div><div class="blob b"></div><div class="blob c"></div>
+
+  <nav>
+    <a class="logo" href="./">RANDOM<span>.GAMES</span></a>
+    <div class="links"><a href="#games">Games</a><a href="#" id="nav-random">Random</a></div>
+  </nav>
+
+  <header class="hero">
+    <h1>PRESS START</h1>
+    <p>Free browser games. <span class="typed" id="typed"></span></p>
+    <button class="btn" id="random">🎲 Play Random Game</button>
+    <a class="btn ghost" href="#games">Browse All</a>
+    <div class="stats">
+      <div><b id="count">0</b><span>Games</span></div>
+      <div><b>0</b><span>Downloads needed</span></div>
+      <div><b>∞</b><span>Fun</span></div>
+    </div>
+  </header>
+
+  <main id="games">
+    <div class="toolbar">
+      <h2>All Games</h2>
+      <input class="search" id="search" type="search" placeholder="🔍 Search games..." aria-label="Search games">
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <footer>Made for fun · Add your own games in <code>games.js</code></footer>
+
+  <script src="games.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

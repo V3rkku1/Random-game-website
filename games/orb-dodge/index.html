@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orb Dodge</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #0b0512; color: #fff; font: 600 18px system-ui; touch-action: none; cursor: none; }
+  #hud { position: fixed; top: 12px; left: 16px; }
+  #msg { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; text-shadow: 0 0 14px #ff512f; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">Time: <span id="t">0.0</span>s · Best: <span id="b">0.0</span>s</div>
+<div id="msg">Move with mouse / touch / arrows<br>Click or press a key to start</div>
+<script>
+const ctx = c.getContext("2d");
+let W, H, p, rocks, alive = false, t0, last, keys = {};
+let best = 0; try { best = +localStorage.dodgeBest || 0; } catch {}
+b.textContent = best.toFixed(1);
+const fit = () => { W = c.width = innerWidth; H = c.height = innerHeight; };
+addEventListener("resize", fit); fit();
+function start() {
+  p = { x: W / 2, y: H * 0.8, r: 12 }; rocks = []; alive = true; t0 = last = performance.now(); msg.style.display = "none";
+  requestAnimationFrame(frame);
+}
+function frame(now) {
+  if (!alive) return;
+  const dt = (now - last) / 16.7, secs = (now - t0) / 1000; last = now;
+  t.textContent = secs.toFixed(1);
+  const sp = 7 * dt;
+  if (keys.ArrowLeft || keys.a) p.x -= sp; if (keys.ArrowRight || keys.d) p.x += sp;
+  if (keys.ArrowUp || keys.w) p.y -= sp; if (keys.ArrowDown || keys.s) p.y += sp;
+  p.x = Math.max(p.r, Math.min(W - p.r, p.x)); p.y = Math.max(p.r, Math.min(H - p.r, p.y));
+  if (Math.random() < (0.03 + secs * 0.004) * dt)
+    rocks.push({ x: Math.random() * W, y: -30, r: 8 + Math.random() * 22, v: 2 + Math.random() * 3 + secs * 0.08, h: Math.random() * 60 });
+  ctx.fillStyle = "rgba(11,5,18,.35)"; ctx.fillRect(0, 0, W, H); // trails
+  ctx.shadowBlur = 20;
+  for (const r of rocks) {
+    r.y += r.v * dt;
+    ctx.shadowColor = ctx.fillStyle = `hsl(${r.h}, 100%, 60%)`;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 7); ctx.fill();
+    if (Math.hypot(r.x - p.x, r.y - p.y) < r.r + p.r) return over(secs);
+  }
+  rocks = rocks.filter(r => r.y < H + 40);
+  ctx.shadowColor = ctx.fillStyle = "#22d3ee";
+  ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+  ctx.shadowBlur = 0;
+  requestAnimationFrame(frame);
+}
+function over(secs) {
+  alive = false;
+  if (secs > best) { best = secs; b.textContent = best.toFixed(1); try { localStorage.dodgeBest = best; } catch {} }
+  msg.innerHTML = `💥 ${secs.toFixed(1)}s<br>Click or press a key`; msg.style.display = "";
+}
+const move = (x, y) => { if (alive) { p.x = x; p.y = y; } };
+addEventListener("mousemove", e => move(e.clientX, e.clientY));
+addEventListener("touchmove", e => move(e.touches[0].clientX, e.touches[0].clientY - 40));
+addEventListener("pointerdown", () => alive || start());
+addEventListener("keydown", e => { keys[e.key] = true; if (!alive) start(); });
+addEventListener("keyup", e => keys[e.key] = false);
+</script>
+</body>
+</html>

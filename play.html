@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Play · Random Games</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="player">
+  <div class="blob a"></div><div class="blob b"></div>
+  <nav>
+    <a class="logo" href="./">RANDOM<span>.GAMES</span></a>
+    <strong id="title"></strong>
+    <div>
+      <button class="btn ghost" id="full">⛶ Fullscreen</button>
+      <button class="btn" id="next">🎲 Random</button>
+    </div>
+  </nav>
+  <div class="frame-wrap"><iframe id="frame" allow="fullscreen; autoplay; gamepad" allowfullscreen></iframe></div>
+  <script src="games.js"></script>
+  <script>
+    const id = new URLSearchParams(location.search).get("g");
+    const g = GAMES.find(x => x.id === id);
+    if (!g) location.href = "./";
+    else {
+      document.title = g.title + " · Random Games";
+      document.getElementById("title").textContent = (g.emoji || "") + " " + g.title;
+      frame.src = `games/${g.id}/index.html`;
+      frame.onload = () => frame.focus();
+    }
+    full.onclick = () => frame.requestFullscreen();
+    next.onclick = () => {
+      const others = GAMES.filter(x => x.id !== id);
+      const r = others[Math.floor(Math.random() * others.length)] || g;
+      location.href = r.url || `play.html?g=${r.id}`;
+    };
+  </script>
+</body>
+</html>
