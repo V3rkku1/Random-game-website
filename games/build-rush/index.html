@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build Rush</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; overflow: hidden; background: #000; color: #fff; font: 600 14px Inter, system-ui, sans-serif; user-select: none; }
+  canvas { display: block; }
+  #cross { position: fixed; left: 50%; top: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; }
+  #cross::before, #cross::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 3px #000; border-radius: 1px; }
+  #cross::before { left: 9px; top: 0; width: 2px; height: 20px; } #cross::after { top: 9px; left: 0; height: 2px; width: 20px; }
+  #hot { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: flex-end; }
+  .slot { width: 62px; height: 62px; border-radius: 12px; background: #0009; border: 2px solid #ffffff2a; display: grid; place-items: center; position: relative; transition: transform .12s, border-color .12s, background .12s; }
+  .slot svg { width: 32px; height: 32px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linejoin: round; }
+  .slot small { position: absolute; top: 3px; left: 6px; font-size: 11px; opacity: .7; }
+  .slot.on { border-color: #ffd166; transform: translateY(-6px); background: #000c; }
+  .slot.on svg { stroke: #ffd166; }
+  #mat { margin-left: 10px; padding: 8px 12px; border-radius: 12px; background: #0009; display: flex; gap: 8px; align-items: center; }
+  #mat i { width: 18px; height: 18px; border-radius: 5px; display: inline-block; opacity: .35; border: 2px solid transparent; }
+  #mat i.on { opacity: 1; border-color: #fff; }
+  #top { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+  .pill { background: #000a; padding: 8px 14px; border-radius: 999px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill b { color: #ffd166; }
+  #hint { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); background: #000a; padding: 6px 12px; border-radius: 999px; font-size: 13px; opacity: .9; white-space: nowrap; }
+  #hint:empty { display: none; }
+  #flash { position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%); font: 800 40px Inter, sans-serif; text-shadow: 0 4px 20px #000a; pointer-events: none; opacity: 0; }
+  #flash.go { animation: flash .9s ease-out; }
+  @keyframes flash { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.5); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
+  .ov { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 30%, #12234acc, #000e); backdrop-filter: blur(5px); z-index: 5; overflow: auto; }
+  .ov[hidden] { display: none; }
+  .box { width: min(92vw, 760px); text-align: center; padding: 20px; animation: pop .4s cubic-bezier(.2, 1.5, .4, 1); }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } }
+  h1 { font-size: clamp(40px, 8vw, 68px); margin: 0; font-weight: 800; letter-spacing: -.04em; background: linear-gradient(90deg, #ffd166, #ff8a5b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: #aab4d0; margin: 6px 0 22px; font-weight: 500; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .mode { background: #ffffff10; border: 2px solid #ffffff1c; border-radius: 16px; padding: 18px 14px; cursor: pointer; transition: transform .15s, border-color .15s, background .15s; color: #fff; font: inherit; }
+  .mode:hover { transform: translateY(-4px); border-color: #ffd166; background: #ffffff18; }
+  .mode b { display: block; font-size: 19px; margin-bottom: 6px; }
+  .mode span { color: #aab4d0; font-weight: 500; font-size: 13px; display: block; }
+  .mode em { display: block; margin-top: 8px; color: #ffd166; font-style: normal; font-size: 12px; }
+  .keys { margin-top: 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px 16px; text-align: left; color: #c8d0e6; font-weight: 500; font-size: 13px; }
+  kbd { background: #ffffff22; border-radius: 5px; padding: 1px 6px; font: 700 12px Inter, sans-serif; color: #fff; margin-right: 4px; }
+  .btn { margin: 6px; padding: 12px 22px; border-radius: 12px; border: 0; font: 700 15px Inter, sans-serif; cursor: pointer; background: #ffd166; color: #221; }
+  .btn.ghost { background: #ffffff1c; color: #fff; }
+  .big { font-size: 54px; font-weight: 800; margin: 8px 0; }
+  #touchNote { color: #ff9f8a; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="cross"></div>
+<div id="top"></div>
+<div id="hint"></div>
+<div id="flash"></div>
+<div id="hot">
+  <div class="slot" data-t="pick"><small>E</small><svg viewBox="0 0 32 32"><path d="M6 10 Q16 2 26 10 M16 7 V28"/></svg></div>
+  <div class="slot" data-t="wall"><small>Q</small><svg viewBox="0 0 32 32"><rect x="7" y="5" width="18" height="22"/></svg></div>
+  <div class="slot" data-t="floor"><small>F</small><svg viewBox="0 0 32 32"><path d="M3 20 L13 13 H29 L19 20 Z"/></svg></div>
+  <div class="slot" data-t="ramp"><small>C</small><svg viewBox="0 0 32 32"><path d="M4 26 H28 V6 Z"/></svg></div>
+  <div class="slot" data-t="cone"><small>V</small><svg viewBox="0 0 32 32"><path d="M3 24 L16 8 L29 24 Z M16 8 V24"/></svg></div>
+  <div id="mat"><small>T</small><i style="background:#b07a45"></i><i style="background:#b5523b"></i><i style="background:#8d99a8"></i></div>
+</div>
+
+<div class="ov" id="menu"><div class="box">
+  <h1>BUILD RUSH</h1>
+  <div class="sub">Build fast. Edit faster.</div>
+  <div class="modes">
+    <button class="mode" data-m="free"><b>🏗️ Free Build</b><span>Sandbox. Build anything, practise edits and ramps.</span></button>
+    <button class="mode" data-m="climb"><b>🚀 Climb</b><span>Reach the ring 10 floors up. Ramp rush as fast as you can.</span><em id="bestClimb"></em></button>
+    <button class="mode" data-m="drill"><b>✂️ Edit Drill</b><span>Copy the glowing edit on your walls. 60 seconds.</span><em id="bestDrill"></em></button>
+  </div>
+  <div class="keys">
+    <div><kbd>WASD</kbd>move <kbd>Space</kbd>jump <kbd>Shift</kbd>sprint</div>
+    <div><kbd>Q</kbd>wall <kbd>F</kbd>floor <kbd>C</kbd>ramp <kbd>V</kbd>cone</div>
+    <div><kbd>Click</kbd>build (hold to spam) <kbd>T</kbd>material</div>
+    <div><kbd>G</kbd>edit · drag tiles · release to confirm</div>
+    <div><kbd>Right-click</kbd>reset edit <kbd>E</kbd>pickaxe</div>
+    <div><kbd>Esc</kbd>pause / menu</div>
+  </div>
+  <div id="touchNote" hidden>Needs a keyboard and mouse.</div>
+</div></div>
+<div class="ov" id="pause" hidden><div class="box"><h1>Paused</h1><div class="sub" id="pauseSub"></div>
+  <button class="btn" id="resume">Resume</button><button class="btn ghost" id="restart">Restart</button><button class="btn ghost" id="toMenu">Menu</button></div></div>
+<div class="ov" id="done" hidden><div class="box"><div class="sub" id="doneT"></div><div class="big" id="doneV"></div><div class="sub" id="doneS"></div>
+  <button class="btn" id="again">Play again</button><button class="btn ghost" id="toMenu2">Menu</button></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// three.js + hand-rolled AABB/slope physics on a 4m build grid. No physics engine: pieces are boxes or analytic slopes.
+const C = 4, V3 = THREE.Vector3, $ = id => document.getElementById(id);
+const store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
+
+// ---------- renderer / scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const canvas = renderer.domElement, scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87b8e8); scene.fog = new THREE.Fog(0x87b8e8, 60, 220);
+const camera = new THREE.PerspectiveCamera(78, 1, .05, 500);
+scene.add(new THREE.HemisphereLight(0xdcecff, 0x4b6b3a, .55));
+const sun = new THREE.DirectionalLight(0xfff0d8, .9); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 160 }); sun.shadow.bias = -.0004;
+scene.add(sun, sun.target);
+
+function tex(w, h, paint, rep = 1) {
+  const cv = Object.assign(document.createElement("canvas"), { width: w, height: h }); paint(cv.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 4; return t;
+}
+// ground with build-grid lines every cell
+const groundTex = tex(128, 128, (x, w) => { x.fillStyle = "#4a7f37"; x.fillRect(0, 0, w, w); for (let i = 0; i < 400; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? "255,255,255" : "0,40,0"},.05)`; x.fillRect(Math.random() * w, Math.random() * w, 3, 3); } x.strokeStyle = "rgba(255,255,255,.22)"; x.lineWidth = 2; x.strokeRect(1, 1, w - 2, w - 2); }, 100);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ map: groundTex, roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// scenery: mountains + trees far away
+for (let i = 0; i < 26; i++) {
+  const a = i / 26 * Math.PI * 2, r = 150 + Math.random() * 40, h = 30 + Math.random() * 50;
+  const m = new THREE.Mesh(new THREE.ConeGeometry(25 + Math.random() * 20, h, 6), new THREE.MeshStandardMaterial({ color: [0x6c7f9a, 0x7b8da6, 0x5f7390][i % 3], flatShading: true }));
+  m.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r); scene.add(m);
+}
+const trunkG = new THREE.CylinderGeometry(.25, .35, 2, 6), leafG = new THREE.ConeGeometry(1.8, 4.5, 7), trunkM = new THREE.MeshStandardMaterial({ color: 0x6b4a2b }), leafM = new THREE.MeshStandardMaterial({ color: 0x3d7d3a, flatShading: true });
+for (let i = 0; i < 120; i++) {
+  const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 70, x = Math.cos(a) * r, z = Math.sin(a) * r, s = .8 + Math.random() * .8;
+  const t = new THREE.Mesh(trunkG, trunkM), l = new THREE.Mesh(leafG, leafM);
+  t.position.set(x, s, z); l.position.set(x, 2 + 2.2 * s, z); t.scale.setScalar(s); l.scale.setScalar(s); l.castShadow = true; scene.add(t, l);
+}
+
+// materials: wood planks / brick / metal panels, all canvas-painted
+const MATS = [
+  tex(128, 128, (x, w) => { x.fillStyle = "#b07a45"; x.fillRect(0, 0, w, w); for (let i = 0; i < 4; i++) { x.fillStyle = i % 2 ? "#a46e3c" : "#b9844f"; x.fillRect(0, i * 32, w, 30); x.fillStyle = "#6b4523"; x.fillRect(0, i * 32 + 30, w, 2); for (let k = 0; k < 6; k++) { x.fillStyle = "rgba(90,55,25,.25)"; x.fillRect(Math.random() * w, i * 32 + Math.random() * 28, 20 + Math.random() * 40, 1); } } x.fillStyle = "#5a3a1c"; x.fillRect(0, 0, 3, w); x.fillRect(w - 3, 0, 3, w); }),
+  tex(128, 128, (x, w) => { x.fillStyle = "#d8cbb8"; x.fillRect(0, 0, w, w); for (let r = 0; r < 8; r++) for (let c = -1; c < 4; c++) { x.fillStyle = `hsl(${8 + Math.random() * 10},${45 + Math.random() * 15}%,${38 + Math.random() * 10}%)`; x.fillRect(c * 40 + (r % 2) * 20 + 2, r * 16 + 2, 36, 12); } }),
+  tex(128, 128, (x, w) => { const g = x.createLinearGradient(0, 0, w, w); g.addColorStop(0, "#a4afbd"); g.addColorStop(1, "#7f8a98"); x.fillStyle = g; x.fillRect(0, 0, w, w); x.strokeStyle = "#5d6673"; x.lineWidth = 3; x.strokeRect(2, 2, w - 4, w - 4); x.beginPath(); x.moveTo(0, w / 2); x.lineTo(w, w / 2); x.stroke(); x.fillStyle = "#cfd6df"; for (const [a, b] of [[10, 10], [w - 10, 10], [10, w - 10], [w - 10, w - 10], [10, w / 2 - 8], [w - 10, w / 2 + 8]]) { x.beginPath(); x.arc(a, b, 3, 0, 7); x.fill(); } }),
+].map(map => new THREE.MeshStandardMaterial({ map, roughness: .8 }));
+MATS[2].metalness = .4; MATS[2].roughness = .45;
+const MAT_COL = [0xb07a45, 0xb5523b, 0x8d99a8];
+const ghostMat = new THREE.MeshBasicMaterial({ color: 0x5ab0ff, transparent: true, opacity: .35, depthWrite: false });
+const ghostBad = new THREE.MeshBasicMaterial({ color: 0xff5a5a, transparent: true, opacity: .25, depthWrite: false });
+
+// ---------- pieces ----------
+// wall: axis 'x' spans x at z=k*C (cell col i); axis 'z' spans z at x=k*C (cell row i). Tiles 3x3, idx=row*3+col.
+// floor: cell (i,j,k) at y=j*C, tiles 2x2 idx=b*2+a. ramp: cell (i,j,k) rising toward dir (0:+x 1:+z 2:-x 3:-z). cone: cell (i,j,k).
+const pieces = new Map(), DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]], ROT = [Math.PI / 2, 0, -Math.PI / 2, Math.PI];
+const RL = C * Math.SQRT2;
+const keyOf = p => p.kind === "wall" ? `w${p.axis}${p.i},${p.j},${p.k}` : p.kind === "floor" ? `f${p.i},${p.j},${p.k}` : `i${p.i},${p.j},${p.k}`; // ramps+cones share the cell interior
+const boxG = {}; const bg = (w, h, d) => boxG[`${w},${h},${d}`] ||= new THREE.BoxGeometry(w, h, d);
+function buildMesh(p, mat) {
+  const g = new THREE.Group(), removed = p.removed || new Set(), add = (geo, x, y, z, idx) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; m.userData = { piece: p, idx }; g.add(m); return m;
+  };
+  if (p.kind === "wall") {
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) if (!removed.has(r * 3 + c)) add(bg(C / 3, C / 3, .25), (c - 1) * C / 3, (r - 1) * C / 3, 0, r * 3 + c);
+    if (p.axis === "x") g.position.set(p.i * C + C / 2, p.j * C + C / 2, p.k * C);
+    else { g.position.set(p.k * C, p.j * C + C / 2, p.i * C + C / 2); g.rotation.y = -Math.PI / 2; }
+  } else if (p.kind === "floor") {
+    for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) if (!removed.has(b * 2 + a)) add(bg(C / 2, .2, C / 2), (a - .5) * C / 2, 0, (b - .5) * C / 2, b * 2 + a);
+    g.position.set(p.i * C + C / 2, p.j * C, p.k * C + C / 2);
+  } else if (p.kind === "ramp") {
+    const slab = new THREE.Group(); slab.rotation.x = -Math.PI / 4; g.add(slab); g.userData.slab = slab;
+    const m = new THREE.Mesh(bg(C, .2, RL), mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; slab.add(m);
+    g.position.set(p.i * C + C / 2, p.j * C + C / 2, p.k * C + C / 2); g.rotation.y = ROT[p.dir];
+  } else {
+    const m = new THREE.Mesh(G_CONE, mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; m.position.y = C / 4; m.rotation.y = Math.PI / 4; g.add(m);
+    g.position.set(p.i * C + C / 2, p.j * C, p.k * C + C / 2);
+  }
+  return g;
+}
+const G_CONE = new THREE.ConeGeometry(C / Math.SQRT2, C / 2, 4, 1, false);
+// collision boxes [x0,y0,z0,x1,y1,z1] for walls and floors
+function boxesOf(p) {
+  const out = [], rm = p.removed;
+  if (p.kind === "wall") for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    if (rm.has(r * 3 + c)) continue;
+    const s0 = p.i * C + c * C / 3, y0 = p.j * C + r * C / 3, n = p.k * C;
+    out.push(p.axis === "x" ? [s0, y0, n - .125, s0 + C / 3, y0 + C / 3, n + .125] : [n - .125, y0, s0, n + .125, y0 + C / 3, s0 + C / 3]);
+  }
+  if (p.kind === "floor") for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) {
+    if (rm.has(b * 2 + a)) continue;
+    const x0 = p.i * C + a * C / 2, z0 = p.k * C + b * C / 2;
+    out.push([x0, p.j * C - .1, z0, x0 + C / 2, p.j * C + .1, z0 + C / 2]);
+  }
+  return out;
+}
+// analytic surface height for ramps/cones at (x,z), or null if outside its footprint
+function surfaceAt(p, x, z) {
+  const u = (x - p.i * C) / C, v = (z - p.k * C) / C;
+  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+  if (p.kind === "ramp") return p.j * C + [u, v, 1 - u, 1 - v][p.dir] * C + .14;
+  if (p.kind === "cone") return p.j * C + C / 2 * (1 - 2 * Math.max(Math.abs(u - .5), Math.abs(v - .5))) + .05;
+  return null;
+}
+const root = new THREE.Group(); scene.add(root);
+const anims = [];
+function addPiece(p, anim = true) {
+  p.removed ||= new Set(); p.mat ??= mat;
+  p.key = keyOf(p); p.boxes = boxesOf(p);
+  p.mesh = buildMesh(p, MATS[p.mat]); root.add(p.mesh); pieces.set(p.key, p);
+  if (anim) { const m = p.mesh, s0 = m.scale.clone(); anims.push({ t: 0, d: .18, f: k => m.scale.copy(s0).multiplyScalar(.75 + .25 * (1 - (1 - k) ** 3)) }); }
+  return p;
+}
+function rebuild(p) { root.remove(p.mesh); p.boxes = boxesOf(p); p.mesh = buildMesh(p, MATS[p.mat]); root.add(p.mesh); }
+function removePiece(p) { root.remove(p.mesh); pieces.delete(p.key); }
+function clearAll() { for (const p of [...pieces.values()]) removePiece(p); }
+
+// ---------- player ----------
+const P = { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true }, EYE = 1.6, HEAD = 1.75, R = .32;
+const keys = {};
+let tool = "wall", mat = 0, mode = "menu", editing = null, holding = false, lastGhostKey = "";
+function overlapsBox(x, y, z, b, lift = 0) { return x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && y + lift + .02 < b[4] && y + HEAD > b[1]; }
+function blocked(x, y, z) {
+  for (const p of pieces.values()) {
+    for (const b of p.boxes) if (overlapsBox(x, y, z, b)) return true;
+    if (p.kind === "ramp" || p.kind === "cone") { const h = surfaceAt(p, x, z); if (h !== null && h > y + .6 && h < y + HEAD) return true; }
+  }
+  return false;
+}
+function supportAt(x, y, z) { // highest walkable surface at or a little above the feet
+  let s = 0;
+  for (const p of pieces.values()) {
+    for (const b of p.boxes) if (x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && b[4] <= y + .6 && b[4] > s) s = b[4];
+    if (p.kind === "ramp" || p.kind === "cone") { const h = surfaceAt(p, x, z); if (h !== null && h <= y + .6 && h > s) s = h; }
+  }
+  return s;
+}
+function ceilingAt(x, y, z) {
+  let c = Infinity;
+  for (const p of pieces.values()) for (const b of p.boxes) if (x + R > b[0] && x - R < b[3] && z + R > b[2] && z - R < b[5] && b[1] >= y + HEAD - .3 && b[1] < c) c = b[1];
+  return c;
+}
+function physics(dt) {
+  const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  const sp = keys.ShiftLeft || keys.ShiftRight ? 8.5 : 6, sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
+  let mx = (-sy * f + cy * s), mz = (-cy * f - sy * s); const ml = Math.hypot(mx, mz) || 1;
+  mx = mx / ml * sp * (f || s ? 1 : 0); mz = mz / ml * sp * (f || s ? 1 : 0);
+  if (keys.Space && P.ground) { P.vy = 8.2; P.ground = false; }
+  const steps = 4, h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    for (const [ax, d] of [["x", mx * h], ["z", mz * h]]) {
+      if (!d) continue;
+      const nx = ax === "x" ? P.x + d : P.x, nz = ax === "z" ? P.z + d : P.z;
+      if (!blocked(nx, P.y, nz)) { P.x = nx; P.z = nz; }
+      else if (P.ground && !blocked(nx, P.y + .45, nz)) { P.x = nx; P.z = nz; P.y += .45; } // step up small ledges
+    }
+    P.vy -= 24 * h;
+    const prevY = P.y; P.y += P.vy * h;
+    const sup = supportAt(P.x, prevY, P.z), ceil = ceilingAt(P.x, prevY, P.z);
+    if (P.vy > 0 && P.y + HEAD > ceil) { P.y = ceil - HEAD; P.vy = 0; }
+    if (P.y <= sup) { P.y = sup; P.vy = 0; P.ground = true; }
+    else if (P.ground && P.vy <= 0 && prevY - sup < .7) { P.y = sup; P.vy = 0; } // stick to slopes walking down
+    else P.ground = false;
+  }
+}
+
+// ---------- aiming & ghost ----------
+const ray = new THREE.Raycaster(), center = new THREE.Vector2(0, 0);
+const look = () => new V3(-Math.sin(P.yaw) * Math.cos(P.pitch), Math.sin(P.pitch), -Math.cos(P.yaw) * Math.cos(P.pitch));
+const facing = () => { const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); return Math.abs(fx) > Math.abs(fz) ? (fx > 0 ? 0 : 2) : (fz > 0 ? 1 : 3); };
+function standingRamp() { for (const p of pieces.values()) if (p.kind === "ramp" && surfaceAt(p, P.x, P.z) !== null && Math.abs(surfaceAt(p, P.x, P.z) - P.y) < .3) return p; return null; }
+function wallOnEdge(cx, cz, d, j) {
+  return d === 0 ? { kind: "wall", axis: "z", k: cx + 1, i: cz, j } : d === 2 ? { kind: "wall", axis: "z", k: cx, i: cz, j } : d === 1 ? { kind: "wall", axis: "x", k: cz + 1, i: cx, j } : { kind: "wall", axis: "x", k: cz, i: cx, j };
+}
+function target() { // which piece the current tool would place
+  const e = new V3(P.x, P.y + EYE, P.z), a = e.clone().addScaledVector(look(), 4.2), pcx = Math.floor(P.x / C), pcz = Math.floor(P.z / C);
+  const cx = Math.floor(a.x / C), cz = Math.floor(a.z / C), d = facing(), base = Math.floor((P.y + .01) / C), up = P.pitch > .4 ? 1 : 0;
+  if (tool === "wall") {
+    const j = base + (P.pitch > .5 ? 1 : 0);
+    if (cx === pcx && cz === pcz) return wallOnEdge(cx, cz, d, j);
+    const dx = cx - pcx, dz = cz - pcz;
+    return wallOnEdge(cx, cz, Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? 2 : 0) : (dz > 0 ? 3 : 1), j);
+  }
+  let j = base + up;
+  const r = standingRamp(); // ramp rush: the cell past the ramp's high end builds one level up
+  if (r && cx === r.i + DIRS[r.dir][0] && cz === r.k + DIRS[r.dir][1]) j = r.j + 1;
+  if (tool === "floor") return { kind: "floor", i: cx, j, k: cz };
+  if (tool === "ramp") return { kind: "ramp", i: cx, j, k: cz, dir: d };
+  if (tool === "cone") return { kind: "cone", i: cx, j, k: cz };
+  return null;
+}
+let ghost = null;
+function updateGhost() {
+  const t = editing || tool === "pick" || mode === "menu" ? null : target();
+  const key = t ? keyOf(t) + (t.dir ?? "") : "";
+  if (key !== lastGhostKey) {
+    if (ghost) root.remove(ghost);
+    ghost = null;
+    if (t) {
+      t.removed = new Set(); const taken = pieces.has(keyOf(t));
+      ghost = buildMesh(t, taken ? ghostBad : ghostMat); ghost.traverse(o => { o.castShadow = false; o.receiveShadow = false; o.userData = {}; }); ghost.userData.t = t; ghost.userData.taken = taken;
+      root.add(ghost);
+    }
+    lastGhostKey = key;
+    if (holding && t) place();
+  }
+}
+function place() {
+  if (!ghost || ghost.userData.taken) return;
+  const t = { ...ghost.userData.t, mat, removed: new Set() };
+  if (t.j < 0) return;
+  const probe = { ...t, removed: new Set() };
+  if (boxesOf(probe).some(b => overlapsBox(P.x, P.y, P.z, b, .05))) return; // never trap the player inside a wall
+  addPiece(t); ghost.userData.taken = true; ghost.traverse(o => o.material && (o.material = ghostBad));
+  const h = (t.kind === "ramp" || t.kind === "cone") ? surfaceAt(t, P.x, P.z) : null;
+  if (h !== null && h > P.y && h < P.y + HEAD) P.y = h; // building a ramp under yourself pops you up
+  sfx(220 + Math.random() * 40, .06, "square", .05); sfx(140, .08, "triangle", .08);
+  stats.built++;
+}
+
+// ---------- editing ----------
+const editMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .14, depthWrite: false });
+const editSel = new THREE.MeshBasicMaterial({ color: 0xff8a3d, transparent: true, opacity: .55, depthWrite: false });
+const editHover = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35, depthWrite: false });
+function tileSlots(p) { // [geometry, x, y, z, idx] in the piece's mesh space
+  if (p.kind === "wall") return [...Array(9)].map((_, n) => [bg(C / 3 * .94, C / 3 * .94, .34), (n % 3 - 1) * C / 3, ((n / 3 | 0) - 1) * C / 3, 0, n]);
+  if (p.kind === "floor") return [...Array(4)].map((_, n) => [bg(C / 2 * .94, .3, C / 2 * .94), (n % 2 - .5) * C / 2, 0, ((n / 2 | 0) - .5) * C / 2, n]);
+  if (p.kind === "ramp") return [...Array(4)].map((_, n) => [bg(C / 2 * .94, .3, RL / 2 * .94), (n % 2 - .5) * C / 2, .05, ((n / 2 | 0) - .5) * RL / 2, n]); // n: bit0 = local +x side, bit1 = high side
+  return [];
+}
+function startEdit() {
+  ray.setFromCamera(center, camera); ray.far = 7;
+  const hit = ray.intersectObjects(root.children.filter(o => o !== ghost && o !== drill?.mark), true)[0];
+  const p = hit?.object.userData.piece;
+  if (!p || p.kind === "cone") return;
+  editing = { p, sel: new Set(p.kind === "ramp" ? [] : p.removed), tiles: [], paint: null, hover: null };
+  const host = p.kind === "ramp" ? p.mesh.userData.slab : p.mesh;
+  for (const [geo, x, y, z, n] of tileSlots(p)) { const m = new THREE.Mesh(geo, editing.sel.has(n) ? editSel : editMat); m.position.set(x, y, z); m.userData.tile = n; m.renderOrder = 5; host.add(m); editing.tiles.push(m); }
+  for (const m of p.mesh.children) if (m.isMesh && m.userData.piece) m.material = m.material.clone(), m.material.transparent = true, m.material.opacity = .55;
+  if (p.kind === "ramp") p.mesh.userData.slab.children[0].material = Object.assign(MATS[p.mat].clone(), { transparent: true, opacity: .55 });
+  if (ghost) { root.remove(ghost); ghost = null; lastGhostKey = ""; }
+  sfx(660, .05); hint();
+}
+function editHit() {
+  ray.setFromCamera(center, camera); ray.far = 9;
+  return ray.intersectObjects(editing.tiles)[0]?.object;
+}
+function paintTile() {
+  const t = editHit(); if (!t) return;
+  const n = t.userData.tile;
+  if (editing.paint === null) editing.paint = !editing.sel.has(n);
+  if (editing.paint) editing.sel.add(n); else editing.sel.delete(n);
+  refreshTiles(); sfx(880, .03, "sine", .04);
+}
+function refreshTiles() { for (const m of editing.tiles) m.material = editing.sel.has(m.userData.tile) ? editSel : m === editing.hover ? editHover : editMat; }
+function confirmEdit() {
+  const { p, sel } = editing;
+  if (p.kind === "ramp") {
+    const s = [...sel]; // selected pair = the side that becomes the high end
+    const pairs = { "2,3": 0, "0,1": 2, "1,3": 3, "0,2": 1 }, k = s.sort().join(","), turn = pairs[k];
+    if (turn !== undefined) { p.dir = (p.dir + turn) % 4; }
+  } else if (sel.size < (p.kind === "wall" ? 9 : 4)) p.removed = new Set(sel);
+  endEdit(); rebuild(p); sfx(520, .05); sfx(780, .08);
+  const [x, y, z] = [p.mesh.position.x, p.mesh.position.y, p.mesh.position.z];
+  burst(x, y, z, MAT_COL[p.mat], 10);
+  stats.edits++; drillCheck(p);
+}
+function resetEdit() { const p = editing.p; p.removed = new Set(); endEdit(); rebuild(p); sfx(330, .08); drillCheck(p); }
+function endEdit() { const p = editing.p; editing = null; rebuild(p); hint(); }
+
+// ---------- effects / sound ----------
+const parts = [], partG = new THREE.BoxGeometry(.18, .18, .18), partM = {};
+function burst(x, y, z, color, n) {
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(partG, partM[color] ||= new THREE.MeshStandardMaterial({ color })); m.position.set(x + (Math.random() - .5) * 2, y + (Math.random() - .5) * 2, z + (Math.random() - .5) * 2); scene.add(m);
+    parts.push({ m, v: new V3((Math.random() - .5) * 5, Math.random() * 5, (Math.random() - .5) * 5), life: .6 + Math.random() * .4 });
+  }
+}
+let ac;
+function sfx(f, d, type = "triangle", vol = .06) {
+  if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * .7, t + d);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d);
+}
+function flash(t, c = "#fff") { const e = $("flash"); e.textContent = t; e.style.color = c; e.classList.remove("go"); void e.offsetWidth; e.classList.add("go"); }
+
+// ---------- modes ----------
+const stats = { built: 0, edits: 0 };
+let ring = null, clock = 0, running = false, drill = null;
+const PATTERNS = [[4], [1, 4], [0, 3], [2, 5], [3, 4, 5], [6, 7, 8], [0, 1, 3, 4], [1, 2, 4, 5], [8], [6], [0, 1, 2, 3, 4, 5], [1, 4, 7]];
+function resetWorld() {
+  clearAll(); editing = null; if (ghost) root.remove(ghost); ghost = null; lastGhostKey = "";
+  if (ring) { scene.remove(ring); ring = null; }
+  if (drill?.mark) root.remove(drill.mark);
+  drill = null; clock = 0; running = false; stats.built = stats.edits = 0;
+  Object.assign(P, { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true }); // facing +x
+}
+function startMode(m) {
+  mode = m; resetWorld();
+  if (m === "climb") {
+    ring = new THREE.Group();
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(2.2, .22, 12, 48), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 44, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: .12, side: THREE.DoubleSide, depthWrite: false }));
+    beam.position.y = -22; ring.add(torus, beam); ring.position.set(10.5 * C, 10 * C + 2, .5 * C); scene.add(ring);
+  }
+  if (m === "drill") {
+    P.x = P.z = C / 2;
+    for (let d = 0; d < 4; d++) addPiece({ ...wallOnEdge(0, 0, d, 0), mat: 1 }, false);
+    addPiece({ kind: "floor", i: 0, j: 1, k: 0, mat: 1 }, false);
+    drill = { score: 0 }; newDrill();
+  }
+  ["menu", "pause", "done"].forEach(k => $(k).hidden = true);
+  ac ||= new AudioContext(); canvas.requestPointerLock?.(); hint();
+}
+function newDrill() {
+  if (drill.mark) root.remove(drill.mark);
+  const walls = [...pieces.values()].filter(p => p.kind === "wall");
+  for (const w of walls) if (w.removed.size) { w.removed = new Set(); rebuild(w); }
+  const w = walls[Math.random() * walls.length | 0], pat = PATTERNS[Math.random() * PATTERNS.length | 0];
+  drill.wall = w; drill.want = new Set(pat);
+  // glowing target tiles drawn on the wall
+  const mark = new THREE.Group(); mark.position.copy(w.mesh.position); mark.rotation.copy(w.mesh.rotation);
+  for (const n of pat) { const m = new THREE.Mesh(bg(C / 3 * .9, C / 3 * .9, .4), new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: .45, depthWrite: false })); m.position.set((n % 3 - 1) * C / 3, ((n / 3 | 0) - 1) * C / 3, 0); mark.add(m); }
+  drill.mark = mark; root.add(mark);
+}
+function drillCheck(p) {
+  if (mode !== "drill" || p !== drill.wall) return;
+  if (!running) { running = true; clock = 60; }
+  const same = p.removed.size === drill.want.size && [...p.removed].every(n => drill.want.has(n));
+  if (!same) return;
+  drill.score++; flash(`+1  (${drill.score})`, "#ffd166"); sfx(784, .1); sfx(1046, .15);
+  newDrill();
+}
+function finish(title, value, sub) {
+  running = false; mode = mode + "-done"; document.exitPointerLock?.();
+  $("doneT").textContent = title; $("doneV").textContent = value; $("doneS").textContent = sub; $("done").hidden = false;
+  [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => sfx(f, .2), i * 90));
+}
+function modeTick(dt) {
+  const top = [];
+  if (mode === "climb") {
+    if (!running && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD)) running = true;
+    if (running) clock += dt;
+    ring.children[0].rotation.y += dt * 1.5;
+    top.push(`⏱ <b>${clock.toFixed(2)}s</b>`, `Height <b>${Math.floor(P.y / C)}</b>/10`);
+    const best = +store("brClimb"); if (best) top.push(`Best ${best.toFixed(2)}s`);
+    if (new V3(P.x, P.y + EYE, P.z).distanceTo(ring.position) < 3.2) {
+      const isBest = !best || clock < best; if (isBest) store("brClimb", clock);
+      finish("Ring reached", clock.toFixed(2) + "s", `${stats.built} pieces built · ${isBest ? "New best!" : "Best " + best.toFixed(2) + "s"}`);
+    }
+  } else if (mode === "drill") {
+    if (running) { clock -= dt; if (clock <= 0) { const best = +store("brDrill") || 0, isBest = drill.score > best; if (isBest) store("brDrill", drill.score); return finish("Edits matched", drill.score, isBest ? "New best!" : `Best ${best}`); } }
+    if (drill.mark) for (const m of drill.mark.children) m.material.opacity = .3 + Math.sin(performance.now() / 150) * .15;
+    top.push(running ? `⏱ <b>${Math.ceil(clock)}s</b>` : "Edit the glowing wall to start", `Score <b>${drill.score}</b>`);
+    const best = store("brDrill"); if (best) top.push(`Best ${best}`);
+  } else if (mode === "free") top.push(`Built <b>${stats.built}</b>`, `Edits <b>${stats.edits}</b>`);
+  const html = top.map(t => `<span class="pill">${t}</span>`).join("");
+  if ($("top").innerHTML !== html) $("top").innerHTML = html;
+}
+function hint() {
+  $("hint").textContent = editing ? "EDIT · click/drag tiles · release to confirm · right-click reset · G cancel"
+    : mode === "drill" ? "Aim at the glowing wall, press G, drag over the glowing tiles" : mode === "climb" ? "Hold click with the ramp (C) and run forward. Walls (Q) help." : "";
+}
+function setTool(t) { tool = t; document.querySelectorAll(".slot").forEach(s => s.classList.toggle("on", s.dataset.t === t)); if (editing) endEdit(); sfx(440, .03); }
+function setMat(m) { mat = m; document.querySelectorAll("#mat i").forEach((e, i) => e.classList.toggle("on", i === m)); }
+
+// ---------- input ----------
+const locked = () => document.pointerLockElement === canvas;
+canvas.addEventListener("click", () => { if (!locked() && (mode === "free" || mode === "climb" || mode === "drill")) canvas.requestPointerLock(); });
+document.addEventListener("pointerlockchange", () => {
+  if (!locked() && ["free", "climb", "drill"].includes(mode) && $("done").hidden) { $("pause").hidden = false; holding = false; $("pauseSub").textContent = { free: "Free Build", climb: "Climb", drill: "Edit Drill" }[mode]; }
+});
+addEventListener("mousemove", e => {
+  if (!locked()) return;
+  P.yaw -= e.movementX * .0022; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * .0022));
+  if (editing && holding) paintTile();
+});
+addEventListener("mousedown", e => {
+  if (!locked()) return;
+  if (e.button === 2) { if (editing) resetEdit(); return; }
+  if (e.button !== 0) return;
+  holding = true;
+  if (editing) { editing.paint = null; paintTile(); return; }
+  if (tool === "pick") {
+    ray.setFromCamera(center, camera); ray.far = 6;
+    const p = ray.intersectObjects(root.children.filter(o => o !== ghost && o !== drill?.mark), true)[0]?.object.userData.piece;
+    if (p && mode !== "drill") { removePiece(p); burst(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, MAT_COL[p.mat], 16); sfx(120, .12, "sawtooth", .06); lastGhostKey = ""; }
+    return;
+  }
+  place();
+});
+addEventListener("mouseup", e => { if (e.button !== 0) return; holding = false; if (editing && editing.paint !== null) confirmEdit(); });
+addEventListener("contextmenu", e => e.preventDefault());
+addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if (!locked()) return;
+  const map = { KeyQ: "wall", KeyF: "floor", KeyC: "ramp", KeyV: "cone", KeyE: "pick" };
+  if (map[e.code]) setTool(map[e.code]);
+  if (e.code === "KeyT") setMat((mat + 1) % 3);
+  if (e.code === "KeyG") editing ? endEdit() : startEdit();
+  if (e.code === "Space") e.preventDefault();
+});
+addEventListener("keyup", e => keys[e.code] = false);
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; holding = false; });
+document.querySelectorAll(".mode").forEach(b => b.onclick = () => startMode(b.dataset.m));
+$("resume").onclick = () => { $("pause").hidden = true; canvas.requestPointerLock(); };
+$("restart").onclick = () => startMode(mode.replace("-done", ""));
+$("again").onclick = () => startMode(mode.replace("-done", ""));
+$("toMenu").onclick = $("toMenu2").onclick = showMenu;
+function showMenu() {
+  mode = "menu"; ["pause", "done"].forEach(k => $(k).hidden = true); $("menu").hidden = false;
+  const c = +store("brClimb"), d = store("brDrill");
+  $("bestClimb").textContent = c ? `Best ${c.toFixed(2)}s` : ""; $("bestDrill").textContent = d ? `Best ${d}` : "";
+}
+if (matchMedia("(pointer: coarse)").matches) $("touchNote").hidden = false;
+
+// ---------- loop ----------
+function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize();
+let last = performance.now(), bob = 0;
+renderer.setAnimationLoop(now => {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  const playing = ["free", "climb", "drill"].includes(mode) && locked();
+  if (playing) { physics(dt); modeTick(dt); }
+  const moving = playing && P.ground && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD);
+  bob += moving ? dt * 11 : 0;
+  camera.position.set(P.x, P.y + EYE + (moving ? Math.sin(bob) * .05 : 0), P.z);
+  camera.rotation.set(P.pitch, P.yaw, 0, "YXZ");
+  if (mode === "menu") { P.yaw += dt * .08; camera.position.set(Math.sin(now / 9000) * 30, 14, Math.cos(now / 9000) * 30); camera.lookAt(0, 6, 0); }
+  sun.position.set(camera.position.x + 30, 60, camera.position.z + 20); sun.target.position.set(camera.position.x, 0, camera.position.z);
+  if (playing) {
+    updateGhost();
+    if (editing && !holding) { const h = editHit() || null; if (h !== editing.hover) { editing.hover = h; refreshTiles(); } }
+    if (ghost) for (const m of ghost.children) if (m.material) m.material.opacity = (ghost.userData.taken ? .18 : .3) + Math.sin(now / 160) * .06;
+  }
+  for (let i = anims.length - 1; i >= 0; i--) { const a = anims[i]; a.t += dt / a.d; a.f(Math.min(1, a.t)); if (a.t >= 1) anims.splice(i, 1); }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.v.y -= 14 * dt; p.m.position.addScaledVector(p.v, dt); p.m.rotation.x += dt * 6; p.life -= dt;
+    p.m.scale.setScalar(Math.max(0, p.life)); if (p.life <= 0) { scene.remove(p.m); parts.splice(i, 1); }
+  }
+  renderer.render(scene, camera);
+});
+// menu backdrop: a little demo fort
+function demoFort() {
+  for (let d = 0; d < 4; d++) { addPiece({ ...wallOnEdge(0, 0, d, 0), mat: 1 }, false); addPiece({ ...wallOnEdge(0, 0, d, 1), mat: 0, removed: new Set(d % 2 ? [4] : [1, 4]) }, false); }
+  addPiece({ kind: "floor", i: 0, j: 1, k: 0, mat: 2 }, false); addPiece({ kind: "cone", i: 0, j: 2, k: 0, mat: 0 }, false);
+  for (let n = 1; n <= 4; n++) addPiece({ kind: "ramp", i: n, j: n - 1, k: -1, dir: 0, mat: n % 3 }, false);
+  addPiece({ kind: "floor", i: 5, j: 4, k: -1, mat: 2 }, false);
+}
+setTool("wall"); setMat(0); demoFort(); showMenu();
+
+// self-checks: tile boxes, ramp surface ends, wall edge mapping
+console.assert(boxesOf({ kind: "wall", axis: "x", i: 0, j: 0, k: 0, removed: new Set([4]) }).length === 8, "wall tiles");
+console.assert(Math.abs(surfaceAt({ kind: "ramp", i: 0, j: 0, k: 0, dir: 0 }, 3.99, 2) - 4.13) < .05, "ramp top");
+console.assert(wallOnEdge(0, 0, 0, 0).k === 1 && wallOnEdge(0, 0, 3, 0).k === 0, "wall edges");
+</script>
+</body>
+</html>

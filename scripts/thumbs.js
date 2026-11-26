@@ -69,6 +69,16 @@ const setup = {
     });
     await p.waitForTimeout(800);
   },
+  "build-rush": async p => {
+    await p.evaluate(() => {
+      startMode("free"); demoFort();
+      for (let n = 0; n < 3; n++) addPiece({ kind: "wall", axis: "x", i: 2 + n, j: 0, k: 2, mat: 2, removed: new Set(n === 1 ? [1, 4] : [4]) }, false);
+      addPiece({ kind: "floor", i: 3, j: 1, k: 1, mat: 0 }, false);
+      Object.assign(P, { x: 27, z: 17, y: 0, yaw: .9, pitch: .12 }); setTool("ramp"); $("top").hidden = $("hint").hidden = true;
+      camera.position.set(P.x, P.y + EYE, P.z); camera.rotation.set(P.pitch, P.yaw, 0, "YXZ");
+    });
+    await p.waitForTimeout(600);
+  },
   chess: async p => {
     await p.evaluate(() => {
       for (const m of ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+", "Nc3"]) lastMove = game.move(m);
