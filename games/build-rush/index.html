@@ -180,6 +180,8 @@ const ghostBad = new THREE.MeshBasicMaterial({ color: 0xff5a5a, transparent: tru
 // floor: cell (i,j,k) at y=j*C, tiles 2x2 idx=b*2+a. ramp: cell (i,j,k) rising toward dir (0:+x 1:+z 2:-x 3:-z). cone: cell (i,j,k).
 const pieces = new Map(), DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]], ROT = [Math.PI / 2, 0, -Math.PI / 2, Math.PI];
 const RL = C * Math.SQRT2;
+// ramp = box sheared 45° (y += z): vertical ends, inset by wall half-thickness so it never pokes through walls on the tile edge
+const RAMP_GEO = (() => { const g = new THREE.BoxGeometry(C - .26, .2, C - .26), a = g.attributes.position; for (let i = 0; i < a.count; i++) a.setY(i, a.getY(i) + a.getZ(i)); g.computeVertexNormals(); return g; })();
 const keyOf = p => p.kind === "wall" ? `w${p.axis}${p.i},${p.j},${p.k}` : p.kind === "floor" ? `f${p.i},${p.j},${p.k}` : `i${p.i},${p.j},${p.k}`; // ramps+cones share the cell interior
 const boxG = {}; const bg = (w, h, d) => boxG[`${w},${h},${d}`] ||= new THREE.BoxGeometry(w, h, d);
 function buildMesh(p, mat) {
@@ -194,8 +196,8 @@ function buildMesh(p, mat) {
     for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) if (!removed.has(b * 2 + a)) add(bg(C / 2, .2, C / 2), (a - .5) * C / 2, 0, (b - .5) * C / 2, b * 2 + a);
     g.position.set(p.i * C + C / 2, p.j * C, p.k * C + C / 2);
   } else if (p.kind === "ramp") {
-    const slab = new THREE.Group(); slab.rotation.x = -Math.PI / 4; g.add(slab); g.userData.slab = slab;
-    const m = new THREE.Mesh(bg(C, .2, RL), mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; slab.add(m);
+    const slab = new THREE.Group(); slab.rotation.x = -Math.PI / 4; g.add(slab); g.userData.slab = slab; // edit tiles live in the slope frame
+    const m = new THREE.Mesh(RAMP_GEO, mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; g.add(m);
     g.position.set(p.i * C + C / 2, p.j * C + C / 2, p.k * C + C / 2); g.rotation.y = ROT[p.dir];
   } else {
     const m = new THREE.Mesh(coneGeo(removed), mat); m.castShadow = m.receiveShadow = true; m.userData = { piece: p }; g.add(m);
@@ -492,7 +494,6 @@ function startEdit() {
   const host = p.kind === "ramp" ? p.mesh.userData.slab : p.mesh;
   for (const [geo, x, y, z, n] of tileSlots(p)) { const m = new THREE.Mesh(geo, editing.sel.has(n) ? editSel : editMat); m.position.set(x, y, z); m.userData.tile = n; m.renderOrder = 5; host.add(m); editing.tiles.push(m); }
   for (const m of p.mesh.children) if (m.isMesh && m.userData.piece) m.material = m.material.clone(), m.material.transparent = true, m.material.opacity = .55;
-  if (p.kind === "ramp") p.mesh.userData.slab.children[0].material = Object.assign(MATS[p.mat].clone(), { transparent: true, opacity: .55 });
   if (ghost) { root.remove(ghost); ghost = null; lastGhostKey = ""; }
   sfx(660, .05); hint();
 }
@@ -565,7 +566,7 @@ const pick = new THREE.Group(); // first-person pickaxe held at the bottom right
   const head = new THREE.Mesh(new THREE.BoxGeometry(.5, .07, .08), new THREE.MeshStandardMaterial({ color: 0x9aa4b2, metalness: .5, roughness: .4 })); head.position.y = .62;
   const tip = new THREE.Mesh(new THREE.ConeGeometry(.05, .2, 6), head.material); tip.rotation.z = -Math.PI / 2; tip.position.set(.33, .62, 0);
   const holder = new THREE.Group(); holder.add(h, head, tip); holder.rotation.set(.3, 0, .5); pick.add(holder);
-  pick.position.set(.42, -.55, -.7); camera.add(pick); scene.add(camera);
+  pick.position.set(.5, -.5, -.85); pick.scale.setScalar(.55); camera.add(pick); scene.add(camera);
 }
 function hud() {
   document.querySelectorAll("#mat .m").forEach((e, i) => { e.classList.toggle("on", i === mat); e.classList.toggle("low", !infinite && mats[i] < COST); e.querySelector("b").textContent = infinite ? "∞" : mats[i]; });
