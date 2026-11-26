@@ -4,17 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Play · Random Games</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="player">
-  <div class="blob a"></div><div class="blob b"></div>
   <nav>
-    <a class="logo" href="./">RANDOM<span>.GAMES</span></a>
+    <a class="logo" href="./">random games</a>
     <strong id="title"></strong>
     <div>
-      <button class="btn ghost" id="full">⛶ Fullscreen</button>
-      <button class="btn" id="next">🎲 Random</button>
+      <button class="btn ghost" id="full">Fullscreen</button>
+      <button class="btn" id="next">Next game</button>
     </div>
   </nav>
   <div class="frame-wrap"><iframe id="frame" allow="fullscreen; autoplay; gamepad" allowfullscreen></iframe></div>
@@ -25,7 +24,7 @@
     if (!g) location.href = "./";
     else {
       document.title = g.title + " · Random Games";
-      document.getElementById("title").textContent = (g.emoji || "") + " " + g.title;
+      document.getElementById("title").textContent = g.title;
       frame.src = `games/${g.id}/index.html`;
       frame.onload = () => frame.focus();
     }
