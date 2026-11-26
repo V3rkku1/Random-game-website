@@ -513,7 +513,7 @@ addEventListener("mousemove", e => {
 addEventListener("mousedown", e => {
   if (!locked()) return;
   if (e.button === 2) { if (editing) resetEdit(); return; }
-  if (e.button !== 0) { keys["Mouse" + e.button] = true; return action("Mouse" + e.button); }
+  if (e.button !== 0) return; // middle/side buttons: handled by trackButtons
   holding = true;
   if (editing) { editing.paint = null; paintTile(); return; }
   if (tool === "pick") {
@@ -524,7 +524,7 @@ addEventListener("mousedown", e => {
   }
   place();
 });
-addEventListener("mouseup", e => { if (e.button !== 0) return void (keys["Mouse" + e.button] = false); holding = false; if (editing && editing.paint !== null) confirmEdit(); });
+addEventListener("mouseup", e => { if (e.button !== 0) return; holding = false; if (editing && editing.paint !== null) confirmEdit(); });
 addEventListener("contextmenu", e => e.preventDefault());
 // side buttons (3/4) trigger browser Back/Forward on release; block that so they work as bindable keys
 for (const t of ["mousedown", "mouseup", "auxclick", "pointerdown", "pointerup"]) addEventListener(t, e => { if (e.button === 1 || e.button === 3 || e.button === 4) e.preventDefault(); }, true);
@@ -545,7 +545,22 @@ addEventListener("keydown", e => {
 });
 // rebinding: capture phase so the game never sees the key being assigned
 addEventListener("keydown", e => { if (!capturing) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.code !== "Escape") setBind(capturing, e.code); capturing = null; labels(); }, true);
-addEventListener("mousedown", e => { if (!capturing || ![1, 3, 4].includes(e.button)) return; e.preventDefault(); setBind(capturing, "Mouse" + e.button); capturing = null; labels(); }, true);
+// middle/side buttons read from the e.buttons bitmask on every mouse/pointer event:
+// a side button pressed while left is held (spam-building) only fires pointermove, never mousedown
+let lastButtons = 0;
+function trackButtons(e) {
+  const b = e.buttons | 0;
+  for (const [bit, n] of [[4, 1], [8, 3], [16, 4]]) {
+    const code = "Mouse" + n, was = lastButtons & bit, now = b & bit;
+    if (now && !was) {
+      if (capturing) { setBind(capturing, code); capturing = null; labels(); }
+      else if (locked()) { keys[code] = true; action(code); }
+    }
+    if (!now && was) keys[code] = false;
+  }
+  lastButtons = b;
+}
+for (const t of ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup"]) addEventListener(t, trackButtons, true);
 $("binds").onclick = e => { const b = e.target.closest(".bind"); if (b) { capturing = b.dataset.a; labels(); } };
 $("resetBinds").onclick = () => { SET.bind = {}; saveSet(); labels(); };
 $("sSens").oninput = e => { SET.sens = +e.target.value; saveSet(); applySet(); };
