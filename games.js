@@ -12,4 +12,5 @@ window.GAMES = [
   { id: "gravity-golf", thumb: "thumbs/gravity-golf.jpg", title: "Gravity Golf", desc: "Minigolf in space. Slingshot around planets into the hole.", tags: ["puzzle", "physics"], emoji: "🪐", colors: ["#6366f1"] },
   { id: "word-rain", thumb: "thumbs/word-rain.jpg", title: "Word Rain", desc: "Type falling words before they hit the ground.", tags: ["typing", "arcade"], emoji: "🌧️", colors: ["#3b82f6"] },
   { id: "mine-grid", thumb: "thumbs/mine-grid.jpg", title: "Mine Grid", desc: "Reveal safe cells, flag the mines. Numbers count nearby bombs.", tags: ["puzzle", "classic"], emoji: "💣", colors: ["#5d7ef0"] },
+  { id: "fort-frenzy", thumb: "thumbs/fort-frenzy.jpg", title: "Fort Frenzy", desc: "Build a 3D fort, grow gold and food, train troops and raid enemy forts.", tags: ["strategy", "3d", "builder"], emoji: "🏰", colors: ["#ffb340"] },
 ];

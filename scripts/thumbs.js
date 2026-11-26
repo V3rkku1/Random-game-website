@@ -57,6 +57,18 @@ const setup = {
     await p.evaluate(() => { click(136); cells.forEach((c, i) => c.mine && Math.random() < .5 && near(i).some(j => cells[j].open) && flag(i)); });
     await p.waitForTimeout(900);
   },
+  "fort-frenzy": async p => {
+    await p.evaluate(() => {
+      $("welcome").hidden = true;
+      S.b = [{ t: "keep", x: 10, y: 10, lv: 2 }, { t: "mine", x: 6, y: 9, lv: 2 }, { t: "farm", x: 6, y: 13, lv: 3 }, { t: "barracks", x: 15, y: 10, lv: 2 },
+        { t: "cannon", x: 11, y: 6, lv: 2 }, { t: "tower", x: 14, y: 14, lv: 2 }, { t: "vault", x: 8, y: 15, lv: 1 }, { t: "mine", x: 15, y: 6, lv: 1, up: Date.now() + 9e5 }];
+      for (let i = 5; i <= 18; i++) S.b.push({ t: "wall", x: i, y: 4, lv: 2 }, { t: "wall", x: i, y: 18, lv: 2 });
+      for (let i = 5; i <= 17; i++) S.b.push({ t: "wall", x: 4, y: i, lv: 2 }, { t: "wall", x: 19, y: i, lv: 2 });
+      S.b[1].stored = 200; buildVillage(); villageTick();
+      camera.position.set(4, 15, 15); controls.target.set(0, 0, 1);
+    });
+    await p.waitForTimeout(800);
+  },
   chess: async p => {
     await p.evaluate(() => {
       for (const m of ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+", "Nc3"]) lastMove = game.move(m);
