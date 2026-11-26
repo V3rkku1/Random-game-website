@@ -45,6 +45,16 @@
   .btn.ghost { background: #ffffff1c; color: #fff; }
   .big { font-size: 54px; font-weight: 800; margin: 8px 0; }
   #touchNote { color: #ff9f8a; margin-top: 14px; }
+  .set { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; text-align: left; margin: 10px 0 18px; }
+  .set label { display: flex; align-items: center; gap: 10px; color: #c8d0e6; white-space: nowrap; }
+  .set input[type=range] { flex: 1; accent-color: #ffd166; }
+  .set output { min-width: 38px; color: #ffd166; font-variant-numeric: tabular-nums; }
+  .set select { font: inherit; background: #ffffff1c; color: #fff; border: 0; border-radius: 8px; padding: 6px 8px; }
+  .set select option { color: #000; }
+  .box h3 { text-align: left; margin: 8px 0; } .box h3 small { color: #8a94b0; font-weight: 500; }
+  .binds { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin-bottom: 14px; }
+  .bind { display: flex; justify-content: space-between; align-items: center; background: #ffffff10; border: 2px solid transparent; border-radius: 10px; padding: 8px 10px; color: #dde3f3; font: 600 13px Inter, sans-serif; cursor: pointer; }
+  .bind:hover { border-color: #ffffff40; } .bind.wait { border-color: #ffd166; } .bind kbd { min-width: 28px; text-align: center; }
 </style>
 </head>
 <body>
@@ -53,12 +63,12 @@
 <div id="hint"></div>
 <div id="flash"></div>
 <div id="hot">
-  <div class="slot" data-t="pick"><small>E</small><svg viewBox="0 0 32 32"><path d="M6 10 Q16 2 26 10 M16 7 V28"/></svg></div>
-  <div class="slot" data-t="wall"><small>Q</small><svg viewBox="0 0 32 32"><rect x="7" y="5" width="18" height="22"/></svg></div>
-  <div class="slot" data-t="floor"><small>F</small><svg viewBox="0 0 32 32"><path d="M3 20 L13 13 H29 L19 20 Z"/></svg></div>
-  <div class="slot" data-t="ramp"><small>C</small><svg viewBox="0 0 32 32"><path d="M4 26 H28 V6 Z"/></svg></div>
-  <div class="slot" data-t="cone"><small>V</small><svg viewBox="0 0 32 32"><path d="M3 24 L16 8 L29 24 Z M16 8 V24"/></svg></div>
-  <div id="mat"><small>T</small><i style="background:#b07a45"></i><i style="background:#b5523b"></i><i style="background:#8d99a8"></i></div>
+  <div class="slot" data-t="pick"><small data-a="pick">E</small><svg viewBox="0 0 32 32"><path d="M6 10 Q16 2 26 10 M16 7 V28"/></svg></div>
+  <div class="slot" data-t="wall"><small data-a="wall">Q</small><svg viewBox="0 0 32 32"><rect x="7" y="5" width="18" height="22"/></svg></div>
+  <div class="slot" data-t="floor"><small data-a="floor">F</small><svg viewBox="0 0 32 32"><path d="M3 20 L13 13 H29 L19 20 Z"/></svg></div>
+  <div class="slot" data-t="ramp"><small data-a="ramp">C</small><svg viewBox="0 0 32 32"><path d="M4 26 H28 V6 Z"/></svg></div>
+  <div class="slot" data-t="cone"><small data-a="cone">V</small><svg viewBox="0 0 32 32"><path d="M3 24 L16 8 L29 24 Z M16 8 V24"/></svg></div>
+  <div id="mat"><small data-a="mat">T</small><i style="background:#b07a45"></i><i style="background:#b5523b"></i><i style="background:#8d99a8"></i></div>
 </div>
 
 <div class="ov" id="menu"><div class="box">
@@ -69,20 +79,27 @@
     <button class="mode" data-m="climb"><b>🚀 Climb</b><span>Reach the ring 10 floors up. Ramp rush as fast as you can.</span><em id="bestClimb"></em></button>
     <button class="mode" data-m="drill"><b>✂️ Edit Drill</b><span>Copy the glowing edit on your walls. 60 seconds.</span><em id="bestDrill"></em></button>
   </div>
-  <div class="keys">
-    <div><kbd>WASD</kbd>move <kbd>Space</kbd>jump <kbd>Shift</kbd>sprint</div>
-    <div><kbd>Q</kbd>wall <kbd>F</kbd>floor <kbd>C</kbd>ramp <kbd>V</kbd>cone</div>
-    <div><kbd>Click</kbd>build (hold to spam) <kbd>T</kbd>material</div>
-    <div><kbd>G</kbd>edit · drag tiles · release to confirm</div>
-    <div><kbd>Right-click</kbd>reset edit <kbd>E</kbd>pickaxe</div>
-    <div><kbd>Esc</kbd>pause / menu</div>
-  </div>
+  <div class="keys" id="keyList"></div>
+  <button class="btn ghost" id="openSet1" style="margin-top:16px">⚙️ Settings</button>
   <div id="touchNote" hidden>Needs a keyboard and mouse.</div>
 </div></div>
 <div class="ov" id="pause" hidden><div class="box"><h1>Paused</h1><div class="sub" id="pauseSub"></div>
-  <button class="btn" id="resume">Resume</button><button class="btn ghost" id="restart">Restart</button><button class="btn ghost" id="toMenu">Menu</button></div></div>
+  <button class="btn" id="resume">Resume</button><button class="btn ghost" id="restart">Restart</button><button class="btn ghost" id="openSet2">⚙️ Settings</button><button class="btn ghost" id="toMenu">Menu</button></div></div>
 <div class="ov" id="done" hidden><div class="box"><div class="sub" id="doneT"></div><div class="big" id="doneV"></div><div class="sub" id="doneS"></div>
   <button class="btn" id="again">Play again</button><button class="btn ghost" id="toMenu2">Menu</button></div></div>
+
+<div class="ov" id="settings" hidden><div class="box">
+  <h1 style="font-size:44px">Settings</h1>
+  <div class="set">
+    <label>Sensitivity <input type="range" id="sSens" min="0.1" max="3" step="0.05"><output id="oSens"></output></label>
+    <label>Field of view <input type="range" id="sFov" min="60" max="110" step="1"><output id="oFov"></output></label>
+    <label>Camera <select id="sCam"><option value="tp">Third person</option><option value="fp">First person</option></select></label>
+    <label><input type="checkbox" id="sInv"> Invert mouse Y</label>
+  </div>
+  <h3>Keybinds <small>click one, then press a key or mouse button 3–5 · Esc cancels</small></h3>
+  <div class="binds" id="binds"></div>
+  <button class="btn ghost" id="resetBinds">Reset keys</button><button class="btn" id="setDone">Done</button>
+</div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -199,6 +216,37 @@ function rebuild(p) { root.remove(p.mesh); p.boxes = boxesOf(p); p.mesh = buildM
 function removePiece(p) { root.remove(p.mesh); pieces.delete(p.key); }
 function clearAll() { for (const p of [...pieces.values()]) removePiece(p); }
 
+// ---------- settings & keybinds (saved in localStorage) ----------
+const ACTIONS = { forward: ["Move forward", "KeyW"], back: ["Move back", "KeyS"], left: ["Move left", "KeyA"], right: ["Move right", "KeyD"], jump: ["Jump", "Space"], sprint: ["Sprint", "ShiftLeft"],
+  wall: ["Wall", "KeyQ"], floor: ["Floor", "KeyF"], ramp: ["Ramp", "KeyC"], cone: ["Cone", "KeyV"], pick: ["Pickaxe", "KeyE"], edit: ["Edit", "KeyG"], mat: ["Material", "KeyT"], cam: ["Switch camera", "KeyP"] };
+const SET = { sens: 1, fov: 78, cam: "tp", inv: false, bind: {} };
+try { Object.assign(SET, JSON.parse(store("brSet") || "{}")); } catch {}
+const saveSet = () => store("brSet", JSON.stringify(SET));
+const bind = a => SET.bind[a] || ACTIONS[a][1];
+const held = a => !!keys[bind(a)];
+const keyName = c => ({ Space: "Space", ShiftLeft: "Shift", ShiftRight: "R-Shift", ControlLeft: "Ctrl", AltLeft: "Alt", Tab: "Tab", CapsLock: "Caps", Mouse1: "Mouse 3", Mouse3: "Mouse 4", Mouse4: "Mouse 5", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→" })[c] || c.replace(/^Key|^Digit|^Numpad/, "");
+let capturing = null, setFrom = "menu";
+function setBind(a, code) {
+  for (const k in ACTIONS) if (k !== a && bind(k) === code) SET.bind[k] = bind(a); // swap instead of leaving a duplicate
+  SET.bind[a] = code; saveSet(); labels();
+}
+function labels() {
+  const k = a => keyName(bind(a));
+  document.querySelectorAll("small[data-a]").forEach(e => e.textContent = k(e.dataset.a));
+  $("keyList").innerHTML = [`<kbd>${k("forward")}${k("left")}${k("back")}${k("right")}</kbd>move <kbd>${k("jump")}</kbd>jump <kbd>${k("sprint")}</kbd>sprint`,
+    `<kbd>${k("wall")}</kbd>wall <kbd>${k("floor")}</kbd>floor <kbd>${k("ramp")}</kbd>ramp <kbd>${k("cone")}</kbd>cone`,
+    `<kbd>Click</kbd>build (hold to spam) <kbd>${k("mat")}</kbd>material`, `<kbd>${k("edit")}</kbd>edit · drag tiles · release to confirm`,
+    `<kbd>Right-click</kbd>reset edit <kbd>${k("pick")}</kbd>pickaxe`, `<kbd>${k("cam")}</kbd>1st / 3rd person <kbd>Esc</kbd>pause`].map(x => `<div>${x}</div>`).join("");
+  $("binds").innerHTML = Object.entries(ACTIONS).map(([a, [n]]) => `<button class="bind ${capturing === a ? "wait" : ""}" data-a="${a}"><span>${n}</span><kbd>${capturing === a ? "…" : k(a)}</kbd></button>`).join("");
+  hint();
+}
+function applySet() {
+  camera.fov = SET.fov; camera.updateProjectionMatrix();
+  $("sSens").value = SET.sens; $("oSens").textContent = (+SET.sens).toFixed(2); $("sFov").value = SET.fov; $("oFov").textContent = SET.fov;
+  $("sCam").value = SET.cam; $("sInv").checked = SET.inv;
+}
+function openSettings(from) { setFrom = from; $(from).hidden = true; $("settings").hidden = false; applySet(); labels(); }
+
 // ---------- player ----------
 const P = { x: 2, y: 0, z: 2, vy: 0, yaw: -Math.PI / 2, pitch: 0, ground: true }, EYE = 1.6, HEAD = 1.75, R = .32;
 const keys = {};
@@ -225,11 +273,11 @@ function ceilingAt(x, y, z) {
   return c;
 }
 function physics(dt) {
-  const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const sp = keys.ShiftLeft || keys.ShiftRight ? 8.5 : 6, sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
+  const f = held("forward") - held("back"), s = held("right") - held("left");
+  const sp = held("sprint") ? 8.5 : 6, sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
   let mx = (-sy * f + cy * s), mz = (-cy * f - sy * s); const ml = Math.hypot(mx, mz) || 1;
   mx = mx / ml * sp * (f || s ? 1 : 0); mz = mz / ml * sp * (f || s ? 1 : 0);
-  if (keys.Space && P.ground) { P.vy = 8.2; P.ground = false; }
+  if (held("jump") && P.ground) { P.vy = 8.2; P.ground = false; }
   const steps = 4, h = dt / steps;
   for (let i = 0; i < steps; i++) {
     for (const [ax, d] of [["x", mx * h], ["z", mz * h]]) {
@@ -313,7 +361,7 @@ function tileSlots(p) { // [geometry, x, y, z, idx] in the piece's mesh space
   return [];
 }
 function startEdit() {
-  ray.setFromCamera(center, camera); ray.far = 7;
+  ray.setFromCamera(center, camera); ray.far = 7 + camDist;
   const hit = ray.intersectObjects(root.children.filter(o => o !== ghost && o !== drill?.mark), true)[0];
   const p = hit?.object.userData.piece;
   if (!p || p.kind === "cone") return;
@@ -326,7 +374,7 @@ function startEdit() {
   sfx(660, .05); hint();
 }
 function editHit() {
-  ray.setFromCamera(center, camera); ray.far = 9;
+  ray.setFromCamera(center, camera); ray.far = 9 + camDist;
   return ray.intersectObjects(editing.tiles)[0]?.object;
 }
 function paintTile() {
@@ -425,7 +473,7 @@ function finish(title, value, sub) {
 function modeTick(dt) {
   const top = [];
   if (mode === "climb") {
-    if (!running && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD)) running = true;
+    if (!running && (held("forward") || held("back") || held("left") || held("right"))) running = true;
     if (running) clock += dt;
     ring.children[0].rotation.y += dt * 1.5;
     top.push(`⏱ <b>${clock.toFixed(2)}s</b>`, `Height <b>${Math.floor(P.y / C)}</b>/10`);
@@ -444,8 +492,9 @@ function modeTick(dt) {
   if ($("top").innerHTML !== html) $("top").innerHTML = html;
 }
 function hint() {
-  $("hint").textContent = editing ? "EDIT · click/drag tiles · release to confirm · right-click reset · G cancel"
-    : mode === "drill" ? "Aim at the glowing wall, press G, drag over the glowing tiles" : mode === "climb" ? "Hold click with the ramp (C) and run forward. Walls (Q) help." : "";
+  const k = a => keyName(bind(a));
+  $("hint").textContent = editing ? `EDIT · click/drag tiles · release to confirm · right-click reset · ${k("edit")} cancel`
+    : mode === "drill" ? `Aim at the glowing wall, press ${k("edit")}, drag over the glowing tiles` : mode === "climb" ? `Hold click with the ramp (${k("ramp")}) and run forward. Walls (${k("wall")}) help.` : "";
 }
 function setTool(t) { tool = t; document.querySelectorAll(".slot").forEach(s => s.classList.toggle("on", s.dataset.t === t)); if (editing) endEdit(); sfx(440, .03); }
 function setMat(m) { mat = m; document.querySelectorAll("#mat i").forEach((e, i) => e.classList.toggle("on", i === m)); }
@@ -458,34 +507,49 @@ document.addEventListener("pointerlockchange", () => {
 });
 addEventListener("mousemove", e => {
   if (!locked()) return;
-  P.yaw -= e.movementX * .0022; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * .0022));
+  const sens = .0022 * SET.sens; P.yaw -= e.movementX * sens; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * sens * (SET.inv ? -1 : 1)));
   if (editing && holding) paintTile();
 });
 addEventListener("mousedown", e => {
   if (!locked()) return;
   if (e.button === 2) { if (editing) resetEdit(); return; }
-  if (e.button !== 0) return;
+  if (e.button !== 0) { keys["Mouse" + e.button] = true; return action("Mouse" + e.button); }
   holding = true;
   if (editing) { editing.paint = null; paintTile(); return; }
   if (tool === "pick") {
-    ray.setFromCamera(center, camera); ray.far = 6;
+    ray.setFromCamera(center, camera); ray.far = 6 + camDist;
     const p = ray.intersectObjects(root.children.filter(o => o !== ghost && o !== drill?.mark), true)[0]?.object.userData.piece;
     if (p && mode !== "drill") { removePiece(p); burst(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, MAT_COL[p.mat], 16); sfx(120, .12, "sawtooth", .06); lastGhostKey = ""; }
     return;
   }
   place();
 });
-addEventListener("mouseup", e => { if (e.button !== 0) return; holding = false; if (editing && editing.paint !== null) confirmEdit(); });
+addEventListener("mouseup", e => { if (e.button !== 0) return void (keys["Mouse" + e.button] = false); holding = false; if (editing && editing.paint !== null) confirmEdit(); });
 addEventListener("contextmenu", e => e.preventDefault());
+function action(code) {
+  for (const t of ["wall", "floor", "ramp", "cone", "pick"]) if (code === bind(t)) setTool(t);
+  if (code === bind("mat")) setMat((mat + 1) % 3);
+  if (code === bind("edit")) editing ? endEdit() : startEdit();
+  if (code === bind("cam")) { SET.cam = SET.cam === "tp" ? "fp" : "tp"; saveSet(); }
+}
 addEventListener("keydown", e => {
   keys[e.code] = true;
   if (!locked()) return;
-  const map = { KeyQ: "wall", KeyF: "floor", KeyC: "ramp", KeyV: "cone", KeyE: "pick" };
-  if (map[e.code]) setTool(map[e.code]);
-  if (e.code === "KeyT") setMat((mat + 1) % 3);
-  if (e.code === "KeyG") editing ? endEdit() : startEdit();
-  if (e.code === "Space") e.preventDefault();
+  action(e.code);
+  if (e.code === "Space" || e.code === "Tab") e.preventDefault();
 });
+// rebinding: capture phase so the game never sees the key being assigned
+addEventListener("keydown", e => { if (!capturing) return; e.preventDefault(); e.stopImmediatePropagation(); if (e.code !== "Escape") setBind(capturing, e.code); capturing = null; labels(); }, true);
+addEventListener("mousedown", e => { if (!capturing || ![1, 3, 4].includes(e.button)) return; e.preventDefault(); setBind(capturing, "Mouse" + e.button); capturing = null; labels(); }, true);
+$("binds").onclick = e => { const b = e.target.closest(".bind"); if (b) { capturing = b.dataset.a; labels(); } };
+$("resetBinds").onclick = () => { SET.bind = {}; saveSet(); labels(); };
+$("sSens").oninput = e => { SET.sens = +e.target.value; saveSet(); applySet(); };
+$("sFov").oninput = e => { SET.fov = +e.target.value; saveSet(); applySet(); };
+$("sCam").onchange = e => { SET.cam = e.target.value; saveSet(); };
+$("sInv").onchange = e => { SET.inv = e.target.checked; saveSet(); };
+$("openSet1").onclick = () => openSettings("menu");
+$("openSet2").onclick = () => openSettings("pause");
+$("setDone").onclick = () => { capturing = null; $("settings").hidden = true; $(setFrom).hidden = false; };
 addEventListener("keyup", e => keys[e.code] = false);
 addEventListener("blur", () => { for (const k in keys) keys[k] = false; holding = false; });
 document.querySelectorAll(".mode").forEach(b => b.onclick = () => startMode(b.dataset.m));
@@ -500,6 +564,45 @@ function showMenu() {
 }
 if (matchMedia("(pointer: coarse)").matches) $("touchNote").hidden = false;
 
+// ---------- third-person character ----------
+const hero = new THREE.Group(), limb = {};
+{
+  const part = (w, h, d, c, x, y, z, pivotY) => { // limbs hang from a pivot so they can swing
+    const piv = new THREE.Group(); piv.position.set(x, pivotY ?? y, z);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: c, roughness: .8 }));
+    m.position.y = pivotY !== undefined ? y - pivotY : 0; m.castShadow = true; piv.add(m); hero.add(piv); return piv;
+  };
+  part(.5, .62, .3, 0xff8a3d, 0, 1.12, 0);                       // jacket
+  part(.36, .36, .34, 0xf0c49a, 0, 1.62, 0);                     // head
+  part(.4, .14, .4, 0x2d3a5a, 0, 1.84, 0);                       // cap
+  part(.26, .06, .18, 0x2d3a5a, 0, 1.79, -.24);                  // cap brim (faces forward = -z)
+  part(.3, .26, .1, 0x5a4630, 0, 1.15, .2);                      // backpack
+  limb.ll = part(.2, .7, .22, 0x2d3a5a, -.13, .42, 0, .8); limb.rl = part(.2, .7, .22, 0x2d3a5a, .13, .42, 0, .8);
+  limb.la = part(.14, .58, .16, 0xff8a3d, -.34, 1.12, 0, 1.38); limb.ra = part(.14, .58, .16, 0xff8a3d, .34, 1.12, 0, 1.38);
+  scene.add(hero);
+}
+let camDist = 0;
+const camRay = new THREE.Raycaster();
+function placeCamera(moving) {
+  const pivot = new V3(P.x, P.y + 1.55, P.z);
+  if (SET.cam === "fp") { camDist = 0; camera.position.set(P.x, P.y + EYE + (moving ? Math.sin(bob) * .05 : 0), P.z); return; }
+  const dir = look(), right = new V3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
+  const want = pivot.clone().addScaledVector(dir, -3.4).addScaledVector(right, .8).add(new V3(0, .35, 0));
+  const off = want.clone().sub(pivot), full = off.length();
+  camRay.set(pivot, off.normalize()); camRay.far = full;
+  const hit = camRay.intersectObjects(root.children.filter(o => o !== ghost && o !== drill?.mark), true)[0];
+  const d = hit ? Math.max(.4, hit.distance - .25) : full; // pull in when a build is behind you
+  camera.position.copy(pivot).addScaledVector(off, d); camera.position.y = Math.max(.3, camera.position.y);
+  camDist = d;
+}
+function animateHero(moving, dt) {
+  hero.visible = SET.cam === "tp" && mode !== "menu";
+  hero.position.set(P.x, P.y, P.z); hero.rotation.y = P.yaw;
+  const sw = moving ? Math.sin(bob) * .7 : 0, air = P.ground ? 0 : .5;
+  limb.ll.rotation.x = sw + air; limb.rl.rotation.x = -sw + air * .3;
+  limb.la.rotation.x = -sw * .8 - (holding ? 1.2 : 0); limb.ra.rotation.x = sw * .8 - (holding || editing ? 1.3 : 0);
+}
+
 // ---------- loop ----------
 function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener("resize", resize); resize();
@@ -508,10 +611,10 @@ renderer.setAnimationLoop(now => {
   const dt = Math.min(.05, (now - last) / 1000); last = now;
   const playing = ["free", "climb", "drill"].includes(mode) && locked();
   if (playing) { physics(dt); modeTick(dt); }
-  const moving = playing && P.ground && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD);
+  const moving = playing && P.ground && (held("forward") || held("back") || held("left") || held("right"));
   bob += moving ? dt * 11 : 0;
-  camera.position.set(P.x, P.y + EYE + (moving ? Math.sin(bob) * .05 : 0), P.z);
   camera.rotation.set(P.pitch, P.yaw, 0, "YXZ");
+  placeCamera(moving); animateHero(moving, dt);
   if (mode === "menu") { P.yaw += dt * .08; camera.position.set(Math.sin(now / 9000) * 30, 14, Math.cos(now / 9000) * 30); camera.lookAt(0, 6, 0); }
   sun.position.set(camera.position.x + 30, 60, camera.position.z + 20); sun.target.position.set(camera.position.x, 0, camera.position.z);
   if (playing) {
@@ -533,7 +636,7 @@ function demoFort() {
   for (let n = 1; n <= 4; n++) addPiece({ kind: "ramp", i: n, j: n - 1, k: -1, dir: 0, mat: n % 3 }, false);
   addPiece({ kind: "floor", i: 5, j: 4, k: -1, mat: 2 }, false);
 }
-setTool("wall"); setMat(0); demoFort(); showMenu();
+setTool("wall"); setMat(0); demoFort(); applySet(); labels(); showMenu();
 
 // self-checks: tile boxes, ramp surface ends, wall edge mapping
 console.assert(boxesOf({ kind: "wall", axis: "x", i: 0, j: 0, k: 0, removed: new Set([4]) }).length === 8, "wall tiles");
