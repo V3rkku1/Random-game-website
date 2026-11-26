@@ -82,7 +82,7 @@ const setup = {
   const ids = process.argv.slice(2);
   const browser = await chromium.launch();
   for (const g of window.GAMES.filter(g => !g.url && (!ids.length || ids.includes(g.id)))) {
-    const wide = g.id === "chess" ? 1000 : 800;
+    const wide = g.id.endsWith("chess") ? 1000 : 800;
     const page = await browser.newPage({ viewport: { width: wide, height: wide * 3 / 4 }, deviceScaleFactor: 640 / wide });
     await page.goto(g.src || "file://" + path.join(root, "games", g.id, "index.html"));
     await page.waitForTimeout(g.src || g.id === "raumschach" ? 3500 : 800);
