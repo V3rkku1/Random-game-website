@@ -6,4 +6,6 @@ window.GAMES = [
   { id: "memory-flip", title: "Memory Flip", desc: "Match all pairs in as few moves as possible.", tags: ["puzzle"], emoji: "🃏", colors: ["#7f00ff", "#e100ff"] },
   { id: "guess-the-song", title: "Guess the Song", desc: "Name the song from a 0.1 second clip.", tags: ["quiz", "music"], emoji: "🎵", colors: ["#f472b6"], src: "https://v3rkku1.github.io/guess-the-song/" },
   { id: "guess-the-car", title: "Guess the Car", desc: "Millionaire-style quiz about cars, F1, rally and MotoGP.", tags: ["quiz", "cars"], emoji: "🏎️", colors: ["#f59e0b"], src: "https://v3rkku1.github.io/Guess-the-car/" },
+  { id: "chess", title: "Chess", desc: "Classic chess. Drag or tap to move, play the computer or a friend.", tags: ["strategy", "board"], emoji: "♟️", colors: ["#b58863"] },
+  { id: "raumschach", title: "Raumschach", desc: "3D chess on a 5×5×5 glass board. Rotate, zoom, conquer.", tags: ["strategy", "board", "3d"], emoji: "🧊", colors: ["#a48bff"] },
 ];

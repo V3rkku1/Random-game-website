@@ -1,0 +1,267 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Raumschach</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: full-screen 3D stack of five glass levels; frosted HUD on top, level filter + rules at bottom */
+:root{
+  --bg:#eef1fb; --b1:#ff8fb8; --b2:#7cb6ff; --b3:#a48bff;
+  --glass:rgba(255,255,255,.45); --edge:rgba(255,255,255,.75); --fg:#1c1c1e; --sub:rgba(60,60,67,.7);
+  --accent:#0a84ff; --alert:#ff3b30;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b0b14; --b1:#c2185b; --b2:#1e5bd8; --b3:#6a3de8;
+  --glass:rgba(30,30,40,.45); --edge:rgba(255,255,255,.18); --fg:#f2f2f7; --sub:rgba(235,235,245,.65); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0b14; --b1:#c2185b; --b2:#1e5bd8; --b3:#6a3de8;
+  --glass:rgba(30,30,40,.45); --edge:rgba(255,255,255,.18); --fg:#f2f2f7; --sub:rgba(235,235,245,.65); color-scheme:dark}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font-family:var(--font)}
+.blob{position:fixed;width:55vmax;aspect-ratio:1;border-radius:50%;filter:blur(80px);opacity:.7;animation:drift 22s ease-in-out infinite alternate}
+.blob:nth-child(1){background:var(--b1);top:-15vmax;left:-15vmax}
+.blob:nth-child(2){background:var(--b2);bottom:-20vmax;right:-15vmax;animation-delay:-8s}
+.blob:nth-child(3){background:var(--b3);top:30%;left:40%;width:35vmax;animation-delay:-14s}
+@keyframes drift{to{transform:translate(8vmax,6vmax) scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.blob{animation:none}}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.pill{position:fixed;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 14px;border-radius:22px;
+  left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));
+  background:var(--glass);border:1px solid var(--edge);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);box-shadow:0 10px 30px rgba(0,0,0,.15)}
+#top{top:calc(12px + env(safe-area-inset-top,0px));justify-content:space-between}
+#bottom{bottom:calc(12px + env(safe-area-inset-bottom,0px));justify-content:center}
+h1{margin:0;font-size:1.2rem;letter-spacing:-.02em}
+#status{font-weight:600;color:var(--sub)} #status.alert{color:var(--alert)}
+.bar{display:flex;gap:6px;flex-wrap:wrap}
+button{font:600 .88rem var(--font);color:var(--accent);background:var(--glass);border:1px solid var(--edge);border-radius:12px;padding:8px 12px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--accent);color:#fff}
+button:focus-visible{outline:3px solid var(--accent)}
+details{font-size:.85rem;color:var(--sub);max-width:70ch}
+summary{cursor:pointer;font-weight:600}
+</style>
+
+<div class="blob"></div><div class="blob"></div><div class="blob"></div>
+<canvas id="c" aria-label="3D Raumschach board, drag to rotate"></canvas>
+<div class="pill" id="top">
+  <h1>Raumschach</h1><span id="status" aria-live="polite"></span>
+  <div class="bar"><button id="undo">Undo</button><button id="ai"></button><button id="reset">New Game</button></div>
+</div>
+<div class="pill" id="bottom">
+  <div class="bar" id="levels" aria-label="Show level"></div>
+  <details><summary>Rules</summary>5×5×5 board, levels A (bottom) to E (top). Rook moves along 1 axis, bishop along 2 axes at once, unicorn (spiked orb) along all 3. Queen combines all three; king steps one square in any of 26 directions. Knight leaps 2+1 in any two axes. Pawns step forward or toward the enemy's level and capture diagonally in either plane; they promote to queen on the far rank of the far level. Drag to orbit, scroll or pinch to zoom.</details>
+</div>
+
+<!-- skipped: time travel, engine search, promotion picker, piece animation; rules hand-written (no library covers Raumschach), three.js + OrbitControls render -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const $ = id => document.getElementById(id), N = 5, at = (x, y, z) => z * 25 + y * 5 + x;
+const V = {p:1,n:3,b:3,u:3,r:5,q:9,k:0};
+const DIRS = []; for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) if (x || y || z) DIRS.push([x, y, z]);
+const axes = d => d.filter(Boolean).length;
+const SLIDE = {r: DIRS.filter(d => axes(d) === 1), b: DIRS.filter(d => axes(d) === 2), u: DIRS.filter(d => axes(d) === 3), q: DIRS, k: DIRS};
+const KNIGHT = []; for (const [a, b] of [[2,1],[1,2]]) for (const p of [[0,1],[0,2],[1,2]]) for (const s of [1,-1]) for (const t of [1,-1]) { const d = [0,0,0]; d[p[0]] = a*s; d[p[1]] = b*t; KNIGHT.push(d); }
+
+// ---- rules (unchanged from 2D version) ----
+let board, turn, hist, sel = null, last = null, ai = true, focus = null;
+function reset() {
+  board = Array(125).fill(null); turn = 'w'; hist = []; sel = last = null;
+  const put = (row, y, z, c) => [...row].forEach((t, x) => board[at(x, y, z)] = {t, c});
+  put('rnknr', 0, 0, 'w'); put('ppppp', 1, 0, 'w'); put('buqbu', 0, 1, 'w'); put('ppppp', 1, 1, 'w');
+  put('rnknr', 4, 4, 'b'); put('ppppp', 3, 4, 'b'); put('buqbu', 4, 3, 'b'); put('ppppp', 3, 3, 'b');
+}
+const xyz = i => [i % 5, (i / 5 | 0) % 5, i / 25 | 0];
+const inside = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < N && y < N && z < N;
+function pseudo(c) {
+  const out = [];
+  board.forEach((p, i) => {
+    if (!p || p.c !== c) return;
+    const [x, y, z] = xyz(i), add = (j, cap) => out.push({from: i, to: j, cap});
+    const tryTo = (X, Y, Z) => { if (!inside(X, Y, Z)) return false; const j = at(X, Y, Z), q = board[j];
+      if (!q) { add(j); return true; } if (q.c !== c) add(j, q); return false; };
+    if (p.t === 'n') return KNIGHT.forEach(([a, b, d]) => tryTo(x + a, y + b, z + d));
+    if (p.t === 'p') {
+      const f = c === 'w' ? 1 : -1;
+      for (const [a, b, d] of [[0, f, 0], [0, 0, f]]) if (inside(x+a, y+b, z+d) && !board[at(x+a, y+b, z+d)]) add(at(x+a, y+b, z+d));
+      for (const [a, b, d] of [[1, f, 0], [-1, f, 0], [1, 0, f], [-1, 0, f]]) {
+        if (!inside(x+a, y+b, z+d)) continue; const q = board[at(x+a, y+b, z+d)]; if (q && q.c !== c) add(at(x+a, y+b, z+d), q);
+      }
+      return;
+    }
+    for (const [a, b, d] of SLIDE[p.t]) for (let k = 1; tryTo(x + a*k, y + b*k, z + d*k) && p.t !== 'k'; k++);
+  });
+  return out;
+}
+function apply(m) {
+  const p = board[m.from], [, y, z] = xyz(m.to), end = p.c === 'w' ? 4 : 0;
+  board[m.to] = p.t === 'p' && y === end && z === end ? {t: 'q', c: p.c} : p; board[m.from] = null;
+}
+const inCheck = c => { const k = board.findIndex(p => p && p.t === 'k' && p.c === c); return pseudo(c === 'w' ? 'b' : 'w').some(m => m.to === k); };
+const legal = c => pseudo(c).filter(m => { const save = board.slice(); apply(m); const ok = !inCheck(c); board = save; return ok; });
+let busy = false;
+function commit(m) { hist.push({board: board.slice(), turn, last}); apply(m); last = m; turn = turn === 'w' ? 'b' : 'w'; sel = null; render(); maybeAI(); }
+// animate first (arc hop + captured piece shatters), then commit the move to the rules state
+function play(m) {
+  busy = true; sel = null; render();
+  const o = pieceMesh[m.from], victim = m.cap && pieceMesh[m.to], a = world(m.from), b = world(m.to);
+  const lift = .5 + a.distanceTo(b) * .35, dur = reduced ? 150 : 650;
+  tween(dur, k => { const e = ease(k); o.position.lerpVectors(a, b, e); o.position.y += Math.sin(e * Math.PI) * lift; o.rotation.y = e * Math.PI * 2; },
+    () => { busy = false; commit(m); });
+  if (victim) tween(dur * .45, k => { victim.scale.setScalar(1 - k); victim.rotation.y = k * 6; victim.position.y = b.y + k * .8; }, null, dur * .6);
+}
+// shortcut: greedy 1-ply AI (best capture, small random jitter); replace with minimax for a real opponent
+function maybeAI() {
+  if (!ai || turn !== 'b') return;
+  const ms = legal('b'); if (!ms.length) return;
+  setTimeout(() => play(ms.map(m => ({m, s: (m.cap ? V[m.cap.t] : 0) + Math.random() * .5})).sort((a, b) => b.s - a.s)[0].m), 450);
+}
+function tap(i) {
+  if (busy || (ai && turn === 'b')) return;
+  const m = sel !== null && legal(turn).find(m => m.from === sel && m.to === i);
+  if (m) return play(m);
+  sel = board[i] && board[i].c === turn && i !== sel ? i : null; render();
+}
+
+// ---- 3D scene ----
+const GAP = 1.7, canvas = $('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias: true, alpha: true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(45, 1, .1, 100);
+camera.position.set(9, 11, 13);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.target.set(0, GAP * 1.8, 0); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 5; controls.maxDistance = 30;
+controls.maxPolarAngle = Math.PI * .62; controls.autoRotate = !reduced; controls.autoRotateSpeed = .5;
+controls.addEventListener('start', () => controls.autoRotate = false);
+
+// reflections: a painted pink/blue/violet studio (matches the page blobs) baked into an env map
+const envC = Object.assign(document.createElement('canvas'), {width: 512, height: 256}), g2 = envC.getContext('2d');
+const sky = g2.createLinearGradient(0, 0, 0, 256); sky.addColorStop(0, '#ffffff'); sky.addColorStop(.5, '#cbbcff'); sky.addColorStop(1, '#3d3480');
+g2.fillStyle = sky; g2.fillRect(0, 0, 512, 256);
+for (const [c, x, y, r] of [['#ff7eb3', 90, 100, 90], ['#6fb0ff', 300, 120, 100], ['#ffffff', 430, 50, 60], ['#ffffff', 180, 30, 40]]) {
+  const rg = g2.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, c); rg.addColorStop(1, 'rgba(0,0,0,0)'); g2.fillStyle = rg; g2.fillRect(0, 0, 512, 256);
+}
+const envT = new THREE.CanvasTexture(envC); envT.mapping = THREE.EquirectangularReflectionMapping; envT.encoding = THREE.sRGBEncoding;
+scene.environment = new THREE.PMREMGenerator(renderer).fromEquirectangular(envT).texture;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6b5cff, .45));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(5, 16, 7); sun.castShadow = true;
+Object.assign(sun.shadow.camera, {left: -7, right: 7, top: 7, bottom: -7, near: 1, far: 40}); sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 4; scene.add(sun);
+const rim = new THREE.PointLight(0xff7eb3, 1.2, 25); rim.position.set(-6, 6, -6); scene.add(rim);
+
+const world = i => { const [x, y, z] = xyz(i); return new THREE.Vector3(x - 2, z * GAP, 2 - y); };
+const glass = (color, opacity, extra) => new THREE.MeshPhysicalMaterial({color, opacity, transparent: true, roughness: .06, clearcoat: 1, clearcoatRoughness: .05, metalness: .05, envMapIntensity: 1.3, depthWrite: opacity > .7, ...extra});
+const M = {w: glass(0xffffff, .95, {envMapIntensity: .8, emissive: 0x3a4a80, emissiveIntensity: .08}), b: glass(0x120a2e, .96, {metalness: .55, roughness: .12, envMapIntensity: .9})};
+const glow = c => new THREE.MeshBasicMaterial({color: c, toneMapped: false});
+
+// table: frosted pedestal with a neon rim, stem and foot
+const deck = glass(0xd9d4ff, .7, {roughness: .2, metalness: .2});
+const slab = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.6, .35, 96), deck); slab.position.y = -.3; slab.receiveShadow = true; scene.add(slab);
+const rimRing = new THREE.Mesh(new THREE.TorusGeometry(5.5, .045, 16, 160), glow(0x9d8cff)); rimRing.rotation.x = Math.PI / 2; rimRing.position.y = -.12; scene.add(rimRing);
+const stem = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.8, 3, 64), deck); stem.position.y = -1.97; scene.add(stem);
+const foot = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.4, .25, 96), deck); foot.position.y = -3.55; scene.add(foot);
+const footRing = new THREE.Mesh(new THREE.TorusGeometry(3.3, .035, 16, 120), glow(0xff8fb8)); footRing.rotation.x = Math.PI / 2; footRing.position.y = -3.42; scene.add(footRing);
+
+const tiles = [], levelDeco = [];
+for (let i = 0; i < 125; i++) {
+  const [x, y, z] = xyz(i), t = new THREE.Mesh(new THREE.BoxGeometry(.94, .05, .94), glass((x + y + z) % 2 ? 0xf2f0ff : 0x4c58c8, (x + y + z) % 2 ? .4 : .6));
+  t.position.copy(world(i)).y -= .03; t.receiveShadow = true; t.userData = {i, z}; scene.add(t); tiles.push(t);
+}
+// each level: glowing frame + floating letter
+const frameGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(5.04, .07, 5.04));
+for (let z = 0; z < N; z++) {
+  const f = new THREE.LineSegments(frameGeo, new THREE.LineBasicMaterial({color: 0xb8c0ff, transparent: true, opacity: .9, toneMapped: false}));
+  f.position.set(0, z * GAP - .03, 0); f.userData = {z}; scene.add(f); levelDeco.push(f);
+  const lc = Object.assign(document.createElement('canvas'), {width: 128, height: 128}), x2 = lc.getContext('2d');
+  x2.font = '700 96px -apple-system, system-ui, sans-serif'; x2.textAlign = 'center'; x2.textBaseline = 'middle';
+  x2.shadowColor = '#7b6cff'; x2.shadowBlur = 18; x2.fillStyle = '#fff'; x2.fillText('ABCDE'[z], 64, 70);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(lc), depthWrite: false, toneMapped: false}));
+  s.scale.setScalar(.7); s.position.set(-3, z * GAP + .1, 3); s.userData = {z}; scene.add(s); levelDeco.push(s);
+}
+// glowing corner posts so the stack reads as one cube
+for (const [x, z] of [[-2.52,-2.52],[2.52,-2.52],[-2.52,2.52],[2.52,2.52]]) {
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, GAP * 4 + .2, 12), glow(0xc9c2ff)); p.position.set(x, GAP * 2, z); scene.add(p);
+}
+
+// tweens: {t0, dur, step(k 0..1), done}; delay lets a capture start mid-flight
+const tweens = [], ease = k => k < .5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2;
+const tween = (dur, step, done, delay = 0) => tweens.push({t0: performance.now() + delay, dur, step, done});
+
+const tpl = {}; // built once per type+colour, then cloned so geometry/materials are shared
+const makePiece = (t, c) => { const o = (tpl[t + c] ??= buildPiece(t, c)).clone(); return o; };
+function buildPiece(t, c) {
+  const g = new THREE.Group(), m = M[c], add = (geo, y, x = 0, z = 0, rx = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.x = rx; g.add(o); };
+  const h = {p: .4, r: .5, n: .45, b: .6, u: .55, q: .75, k: .85}[t], top = .12 + h;
+  add(new THREE.CylinderGeometry(.3, .36, .12, 32), .06);
+  add(new THREE.CylinderGeometry(t === 'r' ? .26 : .12, .23, h, 32), .12 + h / 2);
+  if (t === 'p') add(new THREE.SphereGeometry(.18, 32, 16), top + .08);
+  if (t === 'r') add(new THREE.CylinderGeometry(.32, .28, .2, 8), top + .1);
+  if (t === 'n') add(new THREE.BoxGeometry(.22, .5, .4), top + .14, 0, c === 'w' ? -.1 : .1, c === 'w' ? -.5 : .5);
+  if (t === 'b') { add(new THREE.SphereGeometry(.18, 32, 16), top + .1); add(new THREE.SphereGeometry(.05, 16, 8), top + .33); }
+  if (t === 'u') add(new THREE.OctahedronGeometry(.24), top + .14); // spiked orb = 3-axis diagonal mover
+  if (t === 'q') { add(new THREE.SphereGeometry(.23, 32, 16), top + .04); add(new THREE.ConeGeometry(.12, .26, 8), top + .33); }
+  if (t === 'k') { add(new THREE.CylinderGeometry(.24, .18, .18, 32), top + .09); add(new THREE.BoxGeometry(.08, .38, .08), top + .36); add(new THREE.BoxGeometry(.27, .08, .08), top + .4); }
+  g.traverse(o => o.castShadow = true);
+  return g;
+}
+
+let dyn = [], pieceMesh = {};
+const mat = c => new THREE.MeshBasicMaterial({color: c, transparent: true, opacity: .85, side: THREE.DoubleSide, depthWrite: false});
+const RING = new THREE.RingGeometry(.28, .4, 40), DISC = new THREE.CircleGeometry(.47, 40);
+function render() {
+  dyn.forEach(o => scene.remove(o)); dyn = []; pieceMesh = {};
+  const moves = legal(turn), targets = sel === null ? [] : moves.filter(m => m.from === sel), check = inCheck(turn);
+  const mark = (i, geo, color) => { const r = new THREE.Mesh(geo, mat(color)); r.rotation.x = -Math.PI / 2; r.position.copy(world(i)).y += .01; r.userData = {i, z: xyz(i)[2]}; scene.add(r); dyn.push(r); };
+  if (last) { mark(last.from, DISC, 0xffd60a); mark(last.to, DISC, 0xffd60a); }
+  board.forEach((p, i) => {
+    if (!p) return;
+    const o = makePiece(p.t, p.c); o.position.copy(world(i)); o.userData = {i, z: xyz(i)[2]}; scene.add(o); dyn.push(o); pieceMesh[i] = o;
+    if (p.t === 'k' && p.c === turn && check) mark(i, DISC, 0xff3b30);
+  });
+  if (sel !== null) mark(sel, DISC, 0x0a84ff);
+  targets.forEach(m => { mark(m.to, RING, m.cap ? 0xff2d55 : 0x0a84ff); dyn.at(-1).userData.pulse = true; });
+  [...tiles, ...dyn, ...levelDeco].forEach(o => o.visible = focus === null || o.userData.z === focus);
+  $('status').textContent = !moves.length ? (check ? `Checkmate · ${turn === 'w' ? 'Black' : 'White'} wins` : 'Stalemate')
+    : `${turn === 'w' ? 'White' : 'Black'} to move${check ? ' · Check' : ''}`;
+  $('status').className = check ? 'alert' : '';
+  $('ai').textContent = ai ? 'Vs Computer' : 'Two Players';
+  [...$('levels').children].forEach((b, k) => b.setAttribute('aria-pressed', (k === 0 ? focus === null : focus === k - 1) + ''));
+}
+
+// pick on click (not drag)
+const ray = new THREE.Raycaster(); let down;
+canvas.addEventListener('pointerdown', e => down = [e.clientX, e.clientY]);
+canvas.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+  ray.setFromCamera({x: e.clientX / innerWidth * 2 - 1, y: -e.clientY / innerHeight * 2 + 1}, camera);
+  let o = ray.intersectObjects([...tiles, ...dyn].filter(o => o.visible), true)[0]?.object;
+  while (o && o.userData.i === undefined) o = o.parent;
+  if (o) tap(o.userData.i); else { sel = null; render(); }
+});
+
+['All', ...'ABCDE'].forEach((l, k) => { const b = document.createElement('button'); b.textContent = l;
+  b.onclick = () => { focus = k ? k - 1 : null; render(); }; $('levels').append(b); });
+$('undo').onclick = () => { if (busy) return; do { const h = hist.pop(); if (!h) break; ({board, turn, last} = h); } while (ai && turn === 'b'); sel = null; render(); };
+$('ai').onclick = () => { ai = !ai; render(); maybeAI(); };
+$('reset').onclick = () => { tweens.length = 0; busy = false; reset(); render(); };
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize);
+renderer.setAnimationLoop(now => {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const t = tweens[i], k = Math.min((now - t.t0) / t.dur, 1); if (k < 0) continue;
+    t.step(k); if (k === 1) { tweens.splice(i, 1); t.done?.(); }
+  }
+  const s = reduced ? 0 : now / 1000;
+  dyn.forEach(o => o.userData.pulse && o.scale.setScalar(1 + .12 * Math.sin(s * 5)));
+  const sp = sel !== null && pieceMesh[sel]; if (sp) sp.position.y = world(sel).y + .12 + .06 * Math.sin(s * 4); // hover the picked piece
+  rimRing.material.color.setHSL(.7 + .06 * Math.sin(s * .6), .8, .72);
+  controls.update(); renderer.render(scene, camera);
+});
+reset(); resize(); render();
+
+// self-check: start position has white moves, nobody in check, knight has 24 leap vectors
+console.assert(KNIGHT.length === 24 && legal('w').length > 0 && !inCheck('w') && !inCheck('b'), 'raumschach self-check failed');
+</script>
+
+</body></html>
