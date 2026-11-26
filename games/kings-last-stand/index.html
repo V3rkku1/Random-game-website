@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>King's Last Stand</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow: hidden; background: #0e0f14; color: #eee; font: 500 15px Inter, system-ui, sans-serif; user-select: none; }
+  canvas#gl { display: block; }
+  #hud { position: fixed; top: 14px; left: 16px; font-weight: 700; font-size: 18px; text-shadow: 0 2px 6px #000; line-height: 1.5; pointer-events: none; }
+  #hearts { color: #ff4d5e; font-size: 24px; letter-spacing: 2px; }
+  #mini { position: fixed; top: 14px; right: 16px; width: 144px; height: 144px; border-radius: 8px; box-shadow: 0 6px 20px #000a; opacity: .92; }
+  #cross { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px; pointer-events: none;
+    background: linear-gradient(#fff, #fff) center / 2px 8px no-repeat, linear-gradient(#fff, #fff) center / 8px 2px no-repeat; mix-blend-mode: difference; }
+  #cross.hit { background: linear-gradient(#ff4d5e, #ff4d5e) center / 2px 14px no-repeat, linear-gradient(#ff4d5e, #ff4d5e) center / 14px 2px no-repeat; }
+  #msg { position: fixed; left: 0; right: 0; top: 28%; text-align: center; font: 800 44px Inter, sans-serif; text-shadow: 0 4px 16px #000; pointer-events: none; transition: opacity .4s; }
+  #hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px #ff1e3c; opacity: 0; transition: opacity .35s; }
+  #ov { position: fixed; inset: 0; display: grid; place-items: center; background: #0009; backdrop-filter: blur(3px); cursor: pointer; }
+  #ov[hidden] { display: none; }
+  #ov div { background: #22242c; padding: 28px 36px; border-radius: 16px; text-align: center; max-width: 440px; }
+  #ov h1 { margin: 0 0 8px; font-size: 32px; font-weight: 800; }
+  #ov p { color: #a6a8b2; line-height: 1.5; margin: 0 0 10px; }
+  #ov b { color: #fff; }
+  #ov .go { display: inline-block; margin-top: 8px; background: #f0d9b5; color: #222; font-weight: 700; padding: 10px 22px; border-radius: 10px; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud"><div id="hearts"></div><div id="wave"></div><div id="score"></div></div>
+<canvas id="mini" width="144" height="144"></canvas>
+<div id="cross"></div><div id="msg"></div><div id="hurt"></div>
+<div id="ov"><div><h1 id="ovT">King's Last Stand</h1><p id="ovP">You are the white king, and you brought a gun.<br>Black pieces move by chess rules. A <b>red square</b> marks where one is about to land — get off it.<br><b>WASD</b> move · <b>Mouse</b> aim · <b>Click</b> shoot</p><span class="go" id="ovB">Click to play</span></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// Plain Three.js, no physics/engine: pieces snap between squares, raycast hits, minimap on a 2D canvas.
+const S = 4, $ = id => document.getElementById(id);
+const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 }, HP = { p: 1, n: 2, b: 2, r: 3, q: 5 };
+const GLYPH = { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛" };
+
+// ---------- scene ----------
+const renderer = new THREE.WebGLRenderer({ canvas: $("gl"), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0e0f14); scene.fog = new THREE.Fog(0x0e0f14, 25, 70);
+const camera = new THREE.PerspectiveCamera(75, 1, .05, 200); camera.rotation.order = "YXZ"; scene.add(camera);
+scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x302018, .5));
+const sun = new THREE.DirectionalLight(0xfff1dd, .6); sun.position.set(8, 20, 6); scene.add(sun);
+function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize();
+
+{ // board: checker canvas texture on a slab
+  const c = document.createElement("canvas"); c.width = c.height = 512; const g = c.getContext("2d");
+  for (let i = 0; i < 64; i++) { g.fillStyle = (i % 8 + (i >> 3)) % 2 ? "#b58863" : "#f0d9b5"; g.fillRect(i % 8 * 64, (i >> 3) * 64, 64, 64); }
+  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 8;
+  const top = new THREE.MeshStandardMaterial({ map: tex, roughness: .6 }), side = new THREE.MeshStandardMaterial({ color: 0x4a2f1c });
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(8 * S + 1.2, 1, 8 * S + 1.2), [side, side, top, side, side, side]);
+  slab.position.y = -.5; scene.add(slab);
+  tex.repeat.set(8 * S / (8 * S + 1.2), 8 * S / (8 * S + 1.2)); tex.offset.set(.6 / (8 * S + 1.2), .6 / (8 * S + 1.2));
+}
+const sqPos = (c, r) => [(c - 3.5) * S, (3.5 - r) * S];
+
+// ---------- pieces ----------
+function makePiece(t) {
+  const m = new THREE.MeshStandardMaterial({ color: 0x1d1d24, roughness: .3, metalness: .5 }), g = new THREE.Group();
+  const add = (geo, y, sc, mat = m) => { const o = new THREE.Mesh(geo, mat); o.position.y = y; if (sc) o.scale.set(...sc); g.add(o); return o; };
+  const H = { p: 1, n: 1.3, b: 1.6, r: 1.3, q: 1.9 }[t], T = H + .22, ball = r => new THREE.SphereGeometry(r, 20, 14);
+  add(new THREE.LatheGeometry([[0, 0], [1, 0], [1, .25], [.65, .45], [.38, H], [.7, H + .1], [.7, T], [0, T]].map(([x, y]) => new THREE.Vector2(x, y)), 28), 0);
+  if (t === "p") add(ball(.5), T + .4);
+  if (t === "r") add(new THREE.CylinderGeometry(.78, .7, .75, 8), T + .37);
+  if (t === "b") { add(ball(.5), T + .55, [1, 1.45, 1]); add(ball(.15), T + 1.35); }
+  if (t === "q") { add(ball(.6), T + .45); for (let i = 0; i < 8; i++) { const s = add(new THREE.ConeGeometry(.12, .4, 6), T + 1); s.position.x = Math.cos(i * .785) * .4; s.position.z = Math.sin(i * .785) * .4; } add(ball(.16), T + 1.15); }
+  if (t === "n") { add(new THREE.BoxGeometry(.65, 1.2, .8), T + .5).rotation.x = .25; add(new THREE.BoxGeometry(.55, .5, 1), T + .85).position.z = .45; }
+  const eye = new THREE.MeshBasicMaterial({ color: 0xff2a3a }), ez = { p: .44, r: .76, b: .45, q: .55, n: .96 }[t], ey = T + ({ p: .45, r: .4, b: .55, q: .5, n: .9 }[t]);
+  for (const x of [-.17, .17]) add(ball(.08), ey, null, eye).position.set(x, ey, ez);
+  g.scale.setScalar(1.15); g.userData.mat = m;
+  return g;
+}
+
+// ---------- state ----------
+let st = "menu", hp, score, wave, enemies, dying, inv, fireCd, gunKick, best = 0;
+const player = { x: 0, z: 0, yaw: 0, pitch: 0 }, keys = {};
+try { best = +localStorage.kls || 0; } catch {}
+const psq = () => [Math.max(0, Math.min(7, Math.floor(player.x / S + 4))), Math.max(0, Math.min(7, Math.floor(4 - player.z / S)))];
+const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+const occ = sq => enemies.some(e => same(e.sq, sq) || (e.to && same(e.to, sq)));
+const onBoard = ([c, r]) => c >= 0 && c < 8 && r >= 0 && r < 8;
+
+const mark = new THREE.PlaneGeometry(S * .96, S * .96);
+function spawn(t, sq) {
+  const mesh = makePiece(t), [x, z] = sqPos(...sq); mesh.position.set(x, 0, z); scene.add(mesh);
+  const tele = new THREE.Mesh(mark, new THREE.MeshBasicMaterial({ color: 0xff2040, transparent: true, opacity: 0, depthWrite: false }));
+  tele.rotation.x = -Math.PI / 2; tele.position.y = .02; scene.add(tele);
+  const e = { t, sq, hp: HP[t], mesh, tele, cd: 1 + Math.random() * 2, to: null, warn: 0, anim: null, flash: 0 };
+  mesh.traverse(o => o.userData.e = e);
+  enemies.push(e);
+}
+function nextWave() {
+  wave++; hp = Math.min(3, hp + (wave > 1));
+  const pool = ["p", "p", "p", "n", "b", "r", "q"].slice(0, Math.min(7, 2 + wave)), P = psq();
+  for (let i = 0; i < Math.min(12, 2 + wave); i++) {
+    let sq, tries = 0;
+    do sq = [Math.random() * 8 | 0, 4 + Math.random() * 4 | 0]; while ((occ(sq) || Math.max(Math.abs(sq[0] - P[0]), Math.abs(sq[1] - P[1])) < 3) && ++tries < 50);
+    if (tries < 50) spawn(pool[Math.random() * pool.length | 0], sq);
+  }
+  banner("Wave " + wave);
+}
+
+// chess moves on an empty-ish board: other pieces block, the player's square is a capture
+function movesOf(e) {
+  const [c, r] = e.sq, P = psq(), out = [], free = sq => onBoard(sq) && !occ(sq);
+  if (e.t === "p") {
+    if (free([c, r - 1]) && !same([c, r - 1], P)) out.push([c, r - 1]);
+    for (const d of [-1, 1]) if (same([c + d, r - 1], P)) out.push(P);
+    return out;
+  }
+  if (e.t === "n") return [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]].map(([a, b]) => [c + a, r + b]).filter(free);
+  const dirs = { r: [[1, 0], [-1, 0], [0, 1], [0, -1]], b: [[1, 1], [1, -1], [-1, 1], [-1, -1]] };
+  for (const [a, b] of e.t === "q" ? [...dirs.r, ...dirs.b] : dirs[e.t])
+    for (let k = 1; k < 8; k++) { const sq = [c + a * k, r + b * k]; if (!free(sq)) break; out.push(sq); if (same(sq, P)) break; }
+  return out;
+}
+function think(e) {
+  const P = psq(), ms = movesOf(e);
+  if (!ms.length) return e.cd = .8;
+  const d = sq => (sq[0] - P[0]) ** 2 + (sq[1] - P[1]) ** 2 + Math.random() * 3;
+  e.to = ms.find(sq => same(sq, P)) || ms.sort((a, b) => d(a) - d(b))[0];
+  e.warn = Math.max(.55, .95 - wave * .04);
+  const [x, z] = sqPos(...e.to); e.tele.position.x = x; e.tele.position.z = z;
+}
+function land(e) {
+  e.sq = e.to; e.to = null; e.tele.material.opacity = 0;
+  if (same(e.sq, psq()) && inv <= 0) hurt();
+  if (e.t === "p" && e.sq[1] === 0) { // promotion
+    scene.remove(e.mesh); e.mesh = makePiece("q"); e.mesh.traverse(o => o.userData.e = e); scene.add(e.mesh);
+    e.t = "q"; e.hp = HP.q; const [x, z] = sqPos(...e.sq); e.mesh.position.set(x, 0, z); banner("Pawn promoted!");
+  }
+  e.cd = (1.4 + Math.random() * 1.8) * Math.max(.45, 1 - wave * .05);
+}
+
+// ---------- player ----------
+function hurt() {
+  hp--; inv = 1; tone(90, .35, "sawtooth"); $("hurt").style.opacity = 1; setTimeout(() => $("hurt").style.opacity = 0, 200);
+  if (hp <= 0) end();
+}
+const ray = new THREE.Raycaster();
+function shoot() {
+  fireCd = .2; gunKick = 1; flash.visible = true; setTimeout(() => flash.visible = false, 50); bang();
+  ray.setFromCamera({ x: 0, y: 0 }, camera);
+  const hit = ray.intersectObjects(enemies.map(e => e.mesh), true)[0], e = hit?.object.userData.e;
+  if (!e) return;
+  e.hp--; e.flash = .08; $("cross").classList.add("hit"); setTimeout(() => $("cross").classList.remove("hit"), 90);
+  tone(e.hp ? 520 : 820, .08);
+  if (e.hp > 0) return;
+  score += VAL[e.t] * 100 * wave; scene.remove(e.tele);
+  enemies.splice(enemies.indexOf(e), 1); dying.push({ m: e.mesh, t: 0 });
+  if (!enemies.length) setTimeout(() => st === "play" && !enemies.length && nextWave(), 1200);
+}
+// gun: box body + barrel, attached to camera
+const gun = new THREE.Group(), steel = new THREE.MeshStandardMaterial({ color: 0x2b2d33, metalness: .8, roughness: .3 });
+gun.add(new THREE.Mesh(new THREE.BoxGeometry(.12, .16, .5), steel));
+const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, .45, 12), steel); barrel.rotation.x = Math.PI / 2; barrel.position.set(0, .04, -.4); gun.add(barrel);
+const grip = new THREE.Mesh(new THREE.BoxGeometry(.1, .22, .12), new THREE.MeshStandardMaterial({ color: 0x5a3a22 })); grip.position.set(0, -.15, .12); grip.rotation.x = -.3; gun.add(grip);
+const flash = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd36b })); flash.position.set(0, .04, -.66); flash.visible = false; gun.add(flash);
+gun.position.set(.22, -.2, -.45); gun.scale.setScalar(.55); camera.add(gun);
+
+// ---------- sound ----------
+let ac;
+function tone(f, d, type = "triangle") {
+  ac ||= new AudioContext(); const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * .5, t + d);
+  g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d);
+}
+function bang() {
+  ac ||= new AudioContext(); const n = ac.sampleRate * .18, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 4;
+  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = b; f.frequency.value = 2200; g.gain.value = .45;
+  s.connect(f).connect(g).connect(ac.destination); s.start();
+}
+
+// ---------- flow ----------
+function banner(t) { $("msg").textContent = t; $("msg").style.opacity = 1; clearTimeout(banner.t); banner.t = setTimeout(() => $("msg").style.opacity = 0, 1300); }
+function start() {
+  (enemies || []).forEach(e => { scene.remove(e.mesh); scene.remove(e.tele); }); (dying || []).forEach(d => scene.remove(d.m));
+  [player.x, player.z] = sqPos(4, 0); player.yaw = player.pitch = 0;
+  hp = 3; score = 0; wave = 0; enemies = []; dying = []; inv = 0; fireCd = 0; gunKick = 0; st = "play"; $("ov").hidden = true;
+  nextWave();
+}
+function end() {
+  st = "over"; best = Math.max(best, score); try { localStorage.kls = best; } catch {}
+  document.exitPointerLock?.();
+  $("ovT").textContent = "Checkmate"; $("ovP").innerHTML = `You fell on wave <b>${wave}</b> with <b>${score}</b> points.<br>Best: <b>${best}</b>`;
+  $("ovB").textContent = "Click to play again"; $("ov").hidden = false;
+}
+$("ov").onclick = () => {
+  if (st === "pause") { st = "play"; $("ov").hidden = true; } else start();
+  $("gl").requestPointerLock?.();
+};
+document.addEventListener("pointerlockchange", () => {
+  if (document.pointerLockElement || st !== "play") return;
+  st = "pause"; $("ovT").textContent = "Paused"; $("ovP").textContent = "Click to resume."; $("ovB").textContent = "Resume"; $("ov").hidden = false;
+});
+addEventListener("mousemove", e => {
+  if (!document.pointerLockElement) return;
+  player.yaw -= e.movementX * .0022; player.pitch = Math.max(-1.4, Math.min(1.4, player.pitch - e.movementY * .0022));
+});
+addEventListener("mousedown", e => { if (e.button === 0) keys.fire = true; });
+addEventListener("mouseup", e => { if (e.button === 0) keys.fire = false; });
+addEventListener("keydown", e => keys[e.code] = true);
+addEventListener("keyup", e => keys[e.code] = false);
+
+// ---------- loop ----------
+function update(dt) {
+  const k = (a, b) => keys[a] || keys[b] ? 1 : 0, f = k("KeyW", "ArrowUp") - k("KeyS", "ArrowDown"), s = k("KeyD", "ArrowRight") - k("KeyA", "ArrowLeft");
+  const sy = Math.sin(player.yaw), cy = Math.cos(player.yaw), sp = 8 * dt / (f && s ? Math.SQRT2 : 1), lim = 4 * S - .4;
+  player.x = Math.max(-lim, Math.min(lim, player.x + (-sy * f + cy * s) * sp));
+  player.z = Math.max(-lim, Math.min(lim, player.z + (-cy * f - sy * s) * sp));
+  inv -= dt; fireCd -= dt;
+  if (keys.fire && fireCd <= 0 && document.pointerLockElement) shoot();
+
+  for (const e of enemies) {
+    if (e.anim) {
+      const a = e.anim; a.t = Math.min(1, a.t + dt / .28);
+      e.mesh.position.set(a.x0 + (a.x1 - a.x0) * a.t, Math.sin(a.t * Math.PI) * (e.t === "n" ? 2.2 : .4), a.z0 + (a.z1 - a.z0) * a.t);
+      if (a.t === 1) { e.anim = null; land(e); }
+    } else if (e.to) {
+      e.warn -= dt; e.tele.material.opacity = .35 + .3 * Math.sin(performance.now() / 60);
+      if (e.warn <= 0) { const [x1, z1] = sqPos(...e.to); e.anim = { x0: e.mesh.position.x, z0: e.mesh.position.z, x1, z1, t: 0 }; }
+    } else if ((e.cd -= dt) <= 0) think(e);
+    e.mesh.rotation.y = Math.atan2(player.x - e.mesh.position.x, player.z - e.mesh.position.z);
+    e.flash -= dt; e.mesh.userData.mat.emissive.setHex(e.flash > 0 ? 0xffffff : e.to ? 0x300008 : 0);
+  }
+  for (const d of dying) { d.t += dt; d.m.rotation.x = Math.min(1.5, d.t * 4); d.m.position.y = -d.t * 2; if (d.t > 1) scene.remove(d.m); }
+  dying = dying.filter(d => d.t <= 1);
+}
+function hud() {
+  $("hearts").textContent = "♥".repeat(Math.max(0, hp)) + "♡".repeat(3 - Math.max(0, hp));
+  $("wave").textContent = "Wave " + wave; $("score").textContent = score + " pts";
+  const g = $("mini").getContext("2d"), q = 18;
+  for (let i = 0; i < 64; i++) { g.fillStyle = (i % 8 + (i >> 3)) % 2 ? "#b58863" : "#f0d9b5"; g.fillRect(i % 8 * q, (i >> 3) * q, q, q); }
+  g.fillStyle = "#ff2040b0"; for (const e of enemies) if (e.to) g.fillRect(e.to[0] * q, (7 - e.to[1]) * q, q, q);
+  g.font = "16px 'Segoe UI Symbol','Noto Sans Symbols 2','DejaVu Sans',serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#111";
+  for (const e of enemies) g.fillText(GLYPH[e.t] + "︎", (e.mesh.position.x / S + 4) * q, (e.mesh.position.z / S + 4) * q);
+  const px = (player.x / S + 4) * q, pz = (player.z / S + 4) * q;
+  g.strokeStyle = "#1f6fff"; g.lineWidth = 2; g.beginPath(); g.moveTo(px, pz); g.lineTo(px - Math.sin(player.yaw) * 12, pz - Math.cos(player.yaw) * 12); g.stroke();
+  g.fillStyle = inv > 0 && inv * 10 % 2 > 1 ? "#fff" : "#1f6fff"; g.beginPath(); g.arc(px, pz, 4.5, 0, 7); g.fill();
+}
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (st === "play") update(dt);
+  if (st === "menu") player.yaw += dt * .15; // idle orbit look on title
+  gunKick = Math.max(0, (gunKick || 0) - dt * 8); gun.visible = st !== "menu"; gun.position.z = -.45 + gunKick * .06; gun.rotation.x = gunKick * .25;
+  camera.position.set(player.x, 2.4 + (st === "menu" ? 3 : 0), player.z); camera.rotation.set(player.pitch - (st === "menu" ? .2 : 0), player.yaw, 0);
+  renderer.render(scene, camera);
+  if (enemies) hud();
+}
+[player.x, player.z] = sqPos(4, 0); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

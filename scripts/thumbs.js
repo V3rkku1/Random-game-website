@@ -79,6 +79,31 @@ const setup = {
     });
     await p.waitForTimeout(600);
   },
+  "kings-last-stand": async p => {
+    await p.evaluate(() => {
+      start(); enemies.forEach(e => { scene.remove(e.mesh); scene.remove(e.tele); }); enemies = [];
+      [["q", [3, 4]], ["n", [5, 3]], ["r", [1, 5]], ["b", [6, 6]], ["p", [4, 2]], ["p", [2, 2]]].forEach(([t, sq]) => spawn(t, sq));
+      enemies.forEach(e => e.cd = 99); think(enemies[0]); player.z += 2; player.pitch = -.08; gunKick = .6; flash.visible = true;
+    });
+    await p.waitForTimeout(300);
+  },
+  "ping-pong": async p => {
+    await p.click("text=Normal");
+    await p.evaluate(() => { phase = "play"; last = "a"; score = { p: 7, a: 5 }; hud(); Object.assign(ball, { x: .25, y: .55, z: .3 }); me.tx = .3; me.ty = 1.25; bot.x = -.25; });
+    await p.waitForTimeout(100);
+    await p.evaluate(() => phase = "menu");
+  },
+  "deep-dig": async p => {
+    await p.evaluate(() => { // carve an ore-lined cave, stand in it with lantern lit
+      st = "play"; $("ov").hidden = true; const y0 = 30;
+      for (let x = 6; x < 18; x++) for (let z = 6; z < 18; z++) for (let y = y0; y < y0 + 5; y++) {
+        const edge = x === 6 || x === 17 || z === 6 || z === 17 || y === y0 || y === y0 + 4;
+        W[I(x, y, z)] = edge ? (Math.random() < .25 ? [5, 6, 7, 8, 9, 10][Math.random() * 6 | 0] : 3) : 0;
+      }
+      buildAll(); Object.assign(P, { x: 8, y: y0 + 1.01, z: 15, yaw: -2.4, pitch: -.15 }); money = 340; inv = { 6: 4, 8: 2, 9: 1 }; mine.p = .5;
+    });
+    await p.waitForTimeout(400);
+  },
   chess: async p => {
     await p.evaluate(() => {
       for (const m of ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+", "Nc3"]) lastMove = game.move(m);

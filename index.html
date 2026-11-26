@@ -31,7 +31,7 @@
 
   <footer>random games</footer>
 
-  <script src="games.js"></script>
-  <script src="app.js"></script>
+  <!-- GitHub Pages caches 10 min; timestamp forces fresh game list -->
+  <script>document.write(`<script src="games.js?${Date.now()}"><\/script>`+`<script src="app.js?${Date.now()}"><\/script>`)</script>
 </body>
 </html>
