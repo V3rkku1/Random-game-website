@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Word Rain</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; height: 100vh; overflow: hidden; color: #fff; font: 600 15px Inter, system-ui, sans-serif; user-select: none;
+    background: linear-gradient(#1b2a4a, #3b5a8a 70%, #6d8fb8); }
+  body.frozen { background: linear-gradient(#123a52, #2c7a9a 70%, #8fd3e8); }
+  #rain { position: fixed; inset: 0; pointer-events: none; }
+  #hud { position: fixed; top: 12px; left: 16px; right: 16px; display: flex; gap: 20px; z-index: 3; }
+  #hud small { opacity: .6; font-weight: 500; margin-right: 4px; }
+  #hud .sp { flex: 1; }
+  #combo { color: #ffd166; }
+  #ground { position: fixed; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(#2c3e50, #1a252f); box-shadow: 0 -2px 0 #4a6a8a; }
+  #ground.hit { animation: hit .35s; }
+  @keyframes hit { 30% { background: #a33; } }
+  .w { position: absolute; left: 0; top: 0; font: 800 22px "JetBrains Mono", monospace; padding: 4px 10px; border-radius: 10px; background: #ffffff1a; backdrop-filter: blur(2px); white-space: nowrap; will-change: transform; }
+  .w b { color: #7cffb2; } .w.t { background: #ffffff33; box-shadow: 0 0 0 2px #7cffb2; }
+  .w.gold { color: #ffd166; } .w.gold::before { content: "❄ "; }
+  .w.bomb { color: #ff7a7a; } .w.bomb::before { content: "💣 "; }
+  .w.shake { animation: shake .25s; }
+  @keyframes shake { 25% { margin-left: -6px; } 75% { margin-left: 6px; } }
+  .bit { position: absolute; font: 800 22px "JetBrains Mono", monospace; pointer-events: none; }
+  .pop { position: absolute; font: 800 18px Inter, sans-serif; color: #ffd166; pointer-events: none; }
+  #ov { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; gap: 8px; background: #0b1526aa; backdrop-filter: blur(5px); z-index: 5; }
+  #ov[hidden] { display: none; }
+  #ov > * { margin: 0; animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) backwards; }
+  #ov h1 { font-size: clamp(40px, 9vw, 64px); font-weight: 800; letter-spacing: -.03em; }
+  #ov p { opacity: .8; font-weight: 500; }
+  #ov .cta { margin-top: 12px; opacity: 1; animation: breathe 1.6s infinite; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  @keyframes breathe { 50% { opacity: .4; } }
+  #kb { position: fixed; opacity: 0; top: 0; left: 0; width: 1px; height: 1px; }
+</style>
+</head>
+<body>
+<canvas id="rain"></canvas>
+<div id="hud"><span><small>Score</small><b id="sc">0</b></span><span><small>Level</small><b id="lvl">1</b></span><span id="combo"></span><span class="sp"></span><span id="lives"></span></div>
+<div id="field"></div>
+<div id="ground"></div>
+<input id="kb" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type here">
+<div id="ov"></div>
+<script>
+// DOM words + Web Animations API for bursts; canvas only for the background rain.
+const WORDS = ("rain cloud storm thunder puddle river ocean wave splash drop mist fog breeze wind sky blue grey silver umbrella boots jacket window glass street lamp night city light shadow quiet gentle soft heavy pour drizzle shower flood stream lake pond spring summer autumn winter season weather forecast lightning rainbow sunset sunrise morning evening coffee tea warm blanket book pillow dream sleep wake walk run jump dance music song rhythm beat piano guitar drum melody harmony voice echo whisper shout laugh smile happy calm brave bright clever quick swift sharp smart wise kind friend family garden flower leaf tree forest moss stone rock mountain valley hill meadow field grass seed root branch bark bird feather wing nest egg fox wolf bear deer rabbit otter turtle frog snail moon star planet comet galaxy orbit rocket engine machine robot pixel screen keyboard mouse cable signal network code logic puzzle riddle secret mystery castle tower bridge harbor island desert canyon glacier volcano ember flame spark candle lantern compass map journey travel ticket train station platform window letter stamp parcel paper pencil marker canvas paint color orange purple yellow green crimson velvet marble copper golden crystal diamond pearl shell coral anchor sail captain sailor pirate treasure").split(" ");
+const store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
+let words = [], target = null, score, combo, lives, killed, level, state = "menu", spawnT, frozenT = 0, typedOk, typedAll, startT, ac;
+let best = +store("wordBest") || 0;
+
+// ---------- background rain ----------
+const rc = rain.getContext("2d"); let drops = [];
+function fitRain() { rain.width = innerWidth; rain.height = innerHeight; drops = Array.from({ length: 120 }, () => [Math.random() * innerWidth, Math.random() * innerHeight, 6 + Math.random() * 10]); }
+addEventListener("resize", fitRain); fitRain();
+function drawRain(dt) {
+  rc.clearRect(0, 0, rain.width, rain.height); rc.strokeStyle = "rgba(200,220,255,.35)"; rc.lineWidth = 1.2; rc.beginPath();
+  const sp = frozenT > 0 ? .15 : 1;
+  for (const d of drops) { d[1] += d[2] * 60 * dt * sp; d[0] -= d[2] * 8 * dt * sp; if (d[1] > innerHeight) { d[1] = -20; d[0] = Math.random() * innerWidth * 1.1; } rc.moveTo(d[0], d[1]); rc.lineTo(d[0] - d[2] * .15, d[1] + d[2] * 1.4); }
+  rc.stroke();
+}
+
+// ---------- game ----------
+function start() {
+  ac ||= new AudioContext();
+  words.forEach(w => w.el.remove()); words = []; target = null;
+  score = 0; combo = 0; lives = 3; killed = 0; level = 1; spawnT = 0; frozenT = 0; typedOk = typedAll = 0; startT = performance.now();
+  state = "play"; ov.hidden = true; hud(); kb.focus();
+}
+function spawn() {
+  const pool = WORDS.filter(w => w.length <= 3 + level * 1.5 && !words.some(x => x.text[0] === w[0])); // unique first letters keep targeting unambiguous
+  const text = (pool.length ? pool : WORDS)[Math.random() * (pool.length || WORDS.length) | 0];
+  const r = Math.random(), kind = r < .07 ? "gold" : r < .12 ? "bomb" : "";
+  const el = document.createElement("div"); el.className = "w " + kind; el.textContent = text; field.append(el);
+  const x = 16 + Math.random() * Math.max(10, innerWidth - el.offsetWidth - 32);
+  words.push({ el, text, kind, typed: 0, x, y: -40, speed: (28 + level * 7) * (.8 + Math.random() * .4) });
+}
+function paint(w) { w.el.innerHTML = `<b>${w.text.slice(0, w.typed)}</b>${w.text.slice(w.typed)}`; w.el.classList.toggle("t", w === target); }
+function type(ch) {
+  if (state !== "play") return;
+  typedAll++;
+  if (!target) target = words.filter(w => w.text[0] === ch).sort((a, b) => b.y - a.y)[0] || null;
+  if (target && target.text[target.typed] === ch) {
+    typedOk++; target.typed++; paint(target); tick(500 + target.typed * 40);
+    if (target.typed === target.text.length) kill(target, true);
+  } else {
+    combo = 0; hud(); tick(120, "sawtooth");
+    if (target) { target.el.classList.remove("shake"); void target.el.offsetWidth; target.el.classList.add("shake"); }
+  }
+}
+function kill(w, scored) {
+  words = words.filter(x => x !== w); if (target === w) target = null;
+  const r = w.el.getBoundingClientRect();
+  [...w.text].forEach((ch, i) => { // letters fly apart
+    const b = document.createElement("span"); b.className = "bit"; b.textContent = ch; b.style.left = r.left + 10 + i * 13 + "px"; b.style.top = r.top + 4 + "px";
+    b.style.color = w.kind === "gold" ? "#ffd166" : w.kind === "bomb" ? "#ff7a7a" : "#7cffb2"; document.body.append(b);
+    b.animate([{ transform: "none", opacity: 1 }, { transform: `translate(${(Math.random() - .5) * 160}px, ${-40 - Math.random() * 120}px) rotate(${(Math.random() - .5) * 360}deg)`, opacity: 0 }], { duration: 700, easing: "cubic-bezier(.2,.7,.4,1)" }).onfinish = () => b.remove();
+  });
+  w.el.remove();
+  if (!scored) return;
+  combo++; killed++;
+  const pts = w.text.length * (1 + Math.floor(combo / 5));
+  score += pts; level = 1 + Math.floor(killed / 8);
+  const p = document.createElement("div"); p.className = "pop"; p.textContent = "+" + pts; p.style.left = r.left + "px"; p.style.top = r.top - 10 + "px"; document.body.append(p);
+  p.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(-40px)" }], { duration: 800 }).onfinish = () => p.remove();
+  if (w.kind === "gold") { frozenT = 3.5; document.body.classList.add("frozen"); chord([659, 880, 1175]); }
+  if (w.kind === "bomb") { [...words].forEach(x => kill(x, false)); chord([196, 147, 110]); }
+  hud();
+}
+function land(w) {
+  kill(w, false); lives--; combo = 0; hud(); tick(90, "square");
+  ground.classList.remove("hit"); void ground.offsetWidth; ground.classList.add("hit");
+  if (lives <= 0) over();
+}
+function over() {
+  state = "over";
+  const mins = (performance.now() - startT) / 60000, wpm = Math.round(typedOk / 5 / Math.max(mins, .01)), acc = Math.round(typedOk / Math.max(1, typedAll) * 100);
+  const isBest = score > best; if (isBest) { best = score; store("wordBest", best); }
+  words.forEach(w => w.el.remove()); words = []; target = null;
+  ov.innerHTML = `<p>Game over</p><h1>${score}</h1><p>${wpm} WPM · ${acc}% accuracy · ${isBest && score ? "New best!" : "Best " + best}</p><p class="cta">Press Enter or tap to play again</p>`; ov.hidden = false;
+}
+function hud() {
+  sc.textContent = score; lvl.textContent = level;
+  lives_.textContent = "❤️".repeat(Math.max(0, lives)) + "🤍".repeat(3 - Math.max(0, lives));
+  combo_.textContent = combo >= 5 ? `x${1 + Math.floor(combo / 5)} combo` : "";
+}
+const lives_ = document.getElementById("lives"), combo_ = document.getElementById("combo");
+function tick(f, type = "triangle") {
+  if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = type; o.frequency.value = f; g.gain.setValueAtTime(.07, t); g.gain.exponentialRampToValueAtTime(.001, t + .08);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + .08);
+}
+const chord = fs => fs.forEach((f, i) => setTimeout(() => tick(f), i * 70));
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  drawRain(dt);
+  if (state === "play") {
+    if (frozenT > 0 && (frozenT -= dt) <= 0) document.body.classList.remove("frozen");
+    const slow = frozenT > 0 ? .15 : 1;
+    if ((spawnT -= dt * slow) <= 0) { spawn(); spawnT = Math.max(.7, 2.2 - level * .15); }
+    const floor = innerHeight - 56 - 36;
+    for (const w of [...words]) {
+      w.y += w.speed * dt * slow;
+      w.el.style.transform = `translate(${w.x}px, ${w.y}px)`;
+      if (w.y > floor) land(w);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- input: hidden input so phones get a keyboard ----------
+kb.addEventListener("input", () => { for (const ch of kb.value.toLowerCase()) if (/[a-z]/.test(ch)) type(ch); kb.value = ""; });
+kb.addEventListener("keydown", e => {
+  if (e.key === "Enter" && state !== "play") { e.preventDefault(); start(); }
+  if (e.key === "Escape" && target) { target.typed = 0; paint(target); target = null; }
+});
+addEventListener("pointerdown", () => { state !== "play" ? start() : kb.focus(); });
+addEventListener("keydown", () => document.activeElement !== kb && kb.focus());
+
+ov.innerHTML = `<h1>Word Rain</h1><p>Type the falling words before they hit the ground.</p><p>❄ freezes time · 💣 clears the sky · Esc drops a word</p><p class="cta">Press Enter or tap to start</p>`;
+kb.focus(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gravity Golf</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; overflow: hidden; background: #070a1a; color: #eef; font: 600 15px Inter, system-ui, sans-serif; user-select: none; touch-action: none; }
+  canvas { display: block; cursor: crosshair; }
+  #hud { position: fixed; top: 12px; left: 16px; right: 16px; display: flex; gap: 18px; align-items: center; pointer-events: none; }
+  #hud small { color: #8d93b8; font-weight: 500; margin-right: 4px; }
+  #hud .sp { flex: 1; }
+  #hud button { pointer-events: auto; }
+  button { font: 600 14px Inter, sans-serif; color: #eef; background: #ffffff18; border: 1px solid #ffffff22; border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+  button:hover { background: #ffffff28; }
+  button.main { background: #ffd166; color: #222; border: 0; }
+  #toast { position: fixed; top: 60px; width: 100%; text-align: center; color: #ff9f9f; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .ov { position: fixed; inset: 0; display: grid; place-items: center; background: #070a1acc; backdrop-filter: blur(4px); }
+  .ov[hidden] { display: none; }
+  .card { background: #151a36; border: 1px solid #ffffff18; border-radius: 18px; padding: 24px 28px; text-align: center; animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); max-width: 92vw; }
+  .card h1 { margin: 0 0 6px; font-size: 32px; font-weight: 800; letter-spacing: -.03em; }
+  .card p { margin: 0 0 16px; color: #9aa0c8; font-weight: 500; }
+  .stars { font-size: 40px; letter-spacing: 6px; margin-bottom: 14px; }
+  .stars span { display: inline-block; animation: pop .5s cubic-bezier(.2, 1.8, .4, 1) backwards; }
+  .off { filter: grayscale(1) opacity(.25); }
+  #grid { display: grid; grid-template-columns: repeat(4, 76px); gap: 10px; justify-content: center; margin-bottom: 16px; }
+  #grid button { height: 76px; font-size: 22px; font-weight: 800; display: grid; place-content: center; gap: 2px; }
+  #grid button small { font-size: 11px; letter-spacing: 1px; }
+  @keyframes pop { from { transform: scale(.5); opacity: 0; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <span><small>Hole</small><b id="hn"></b></span><span><small>Par</small><b id="hp"></b></span><span><small>Strokes</small><b id="hs"></b></span>
+  <span class="sp"></span><button id="lv">Holes</button><button id="rs">Restart</button>
+</div>
+<div id="toast"></div>
+<div class="ov" id="menu"><div class="card"><h1>Gravity Golf</h1><p>Drag back from anywhere and release to shoot.<br>Planets pull the ball. Land on them to rest.</p><div id="grid"></div></div></div>
+<div class="ov" id="done" hidden><div class="card"><div class="stars" id="st"></div><h1 id="dt"></h1><p id="dp"></p><button id="again">Retry</button> <button class="main" id="next">Next hole</button></div></div>
+<script>
+// Hand-rolled point-mass gravity (a = G·r²/d²) with fixed-step integration; no physics engine needed.
+const LEVELS = [
+  { ball: [120, 320], hole: [880, 320], par: 2, planets: [[500, 320, 80]] },
+  { ball: [120, 540], hole: [880, 130], par: 2, planets: [[420, 250, 70], [680, 440, 60]] },
+  { ball: [500, 590], hole: [500, 60], par: 2, planets: [[500, 330, 120]] },
+  { ball: [90, 90], hole: [910, 560], par: 3, planets: [[300, 290, 60], [520, 170, 45], [700, 420, 85]] },
+  { ball: [110, 320], hole: [900, 320], par: 3, planets: [[330, 190, 55], [330, 450, 55], [620, 320, 95]] },
+  { ball: [500, 320], hole: [920, 70], par: 3, planets: [[320, 320, 60], [680, 320, 60], [500, 130, 45], [500, 510, 45]] },
+  { ball: [80, 570], hole: [920, 70], par: 3, planets: [[250, 390, 70], [470, 240, 40], [640, 480, 75], [810, 260, 50]] },
+  { ball: [140, 80], hole: [140, 560], par: 2, planets: [[430, 320, 150], [140, 320, 30]] },
+].map(l => ({ ...l, planets: l.planets.map(([x, y, r], i) => ({ x, y, r, hue: (i * 67 + l.hole[0]) % 360, ring: r >= 75, craters: Array.from({ length: 5 }, () => [Math.random() * 2 - 1, Math.random() * 2 - 1, .1 + Math.random() * .18]) })) }));
+const G = 520, BR = 7, HOLE = 18, ctx = c.getContext("2d"), store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
+let starsSaved = JSON.parse(store("golfStars") || "{}");
+let W, H, k, ox, oy, L, li, ball, vel, strokes, mode = "menu", aim = null, shotFrom, flight, restT, trail = [], sink = 0, bg = [];
+
+function fit() {
+  const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight;
+  c.width = W * d; c.height = H * d; c.style.width = W + "px"; c.style.height = H + "px"; ctx.setTransform(d, 0, 0, d, 0, 0);
+  k = Math.min(W / 1000, (H - 50) / 640); ox = (W - 1000 * k) / 2; oy = 50 + (H - 50 - 640 * k) / 2;
+  bg = Array.from({ length: 160 }, () => [Math.random() * W, Math.random() * H, Math.random() * 1.4 + .2, Math.random() * 6]);
+}
+addEventListener("resize", fit);
+const toWorld = e => [(e.clientX - ox) / k, (e.clientY - oy) / k];
+
+function load(i) {
+  li = i; L = LEVELS[i]; ball = [...L.ball]; vel = [0, 0]; strokes = 0; mode = "aim"; trail = []; sink = 0;
+  menu.hidden = done.hidden = true; hud();
+}
+function hud() { hn.textContent = `${li + 1}/${LEVELS.length}`; hp.textContent = L.par; hs.textContent = strokes; }
+function toast(t) { const e = document.getElementById("toast"); e.textContent = t; e.style.opacity = 1; setTimeout(() => e.style.opacity = 0, 1400); }
+
+// one physics step; returns contact flag
+function step(p, v, dt) {
+  let touch = false;
+  for (const pl of L.planets) {
+    const dx = pl.x - p[0], dy = pl.y - p[1], d = Math.hypot(dx, dy), a = G * pl.r * pl.r / (d * d);
+    v[0] += dx / d * a * dt; v[1] += dy / d * a * dt;
+  }
+  const hd = Math.hypot(L.hole[0] - p[0], L.hole[1] - p[1]);
+  if (hd < 60) { v[0] += (L.hole[0] - p[0]) / hd * 500 * dt; v[1] += (L.hole[1] - p[1]) / hd * 500 * dt; }
+  v[0] *= 1 - .35 * dt; v[1] *= 1 - .35 * dt; // light space drag so shots settle
+  p[0] += v[0] * dt; p[1] += v[1] * dt;
+  for (const [i, max] of [[0, 1000], [1, 640]]) { // bouncy arena walls
+    if (p[i] < BR) { p[i] = BR; v[i] = Math.abs(v[i]) * .7; }
+    if (p[i] > max - BR) { p[i] = max - BR; v[i] = -Math.abs(v[i]) * .7; }
+  }
+  for (const pl of L.planets) {
+    const nx = p[0] - pl.x, ny = p[1] - pl.y, d = Math.hypot(nx, ny);
+    if (d < pl.r + BR + 1.5) touch = true; // tolerance so micro-bounces still count as resting
+    if (d < pl.r + BR) {
+      const ux = nx / d, uy = ny / d, vn = v[0] * ux + v[1] * uy;
+      p[0] = pl.x + ux * (pl.r + BR); p[1] = pl.y + uy * (pl.r + BR);
+      if (vn < 0) { v[0] -= 1.5 * vn * ux; v[1] -= 1.5 * vn * uy; }
+      v[0] *= .97; v[1] *= .97;
+    }
+  }
+  return touch;
+}
+function shoot(dx, dy) {
+  const len = Math.min(170, Math.hypot(dx, dy));
+  if (len < 8) return;
+  const pw = len / 170 * 720, a = Math.atan2(dy, dx);
+  vel = [Math.cos(a) * pw, Math.sin(a) * pw]; shotFrom = [...ball]; flight = 0; restT = 0; strokes++; mode = "fly"; hud();
+}
+function update(dt) {
+  if (mode === "sink") { sink = Math.min(1, sink + dt * 2.5); if (sink === 1) finish(); return; }
+  if (mode !== "fly") return;
+  flight += dt;
+  for (let i = 0; i < 4; i++) {
+    const touch = step(ball, vel, dt / 4);
+    if (Math.hypot(L.hole[0] - ball[0], L.hole[1] - ball[1]) < HOLE) { mode = "sink"; beep([523, 659, 784]); return; }
+    restT = touch && Math.hypot(...vel) < 30 ? restT + dt / 4 : 0;
+  }
+  trail.push([...ball]); if (trail.length > 40) trail.shift();
+  if (restT > .35) { vel = [0, 0]; mode = "aim"; }
+  if (flight > 12) { ball = shotFrom; vel = [0, 0]; strokes++; mode = "aim"; trail = []; hud(); toast("Lost in orbit · +1 stroke"); beep([220, 165]); }
+}
+function finish() {
+  mode = "done";
+  const s = strokes <= L.par ? 3 : strokes === L.par + 1 ? 2 : 1;
+  starsSaved[li] = Math.max(starsSaved[li] || 0, s); store("golfStars", JSON.stringify(starsSaved));
+  st.innerHTML = [0, 1, 2].map(i => `<span class="${i < s ? "" : "off"}" style="animation-delay:${.15 + i * .15}s">⭐</span>`).join("");
+  const diff = strokes - L.par;
+  dt_.textContent = strokes === 1 ? "Hole in one!" : diff < 0 ? "Under par!" : diff === 0 ? "Par" : `+${diff} over par`;
+  dp.textContent = `${strokes} stroke${strokes > 1 ? "s" : ""} · par ${L.par}`;
+  next.textContent = li + 1 < LEVELS.length ? "Next hole" : "All holes";
+  done.hidden = false;
+}
+const dt_ = document.getElementById("dt");
+let ac;
+function beep(fs) {
+  if (!ac) return;
+  fs.forEach((f, i) => {
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + i * .08;
+    o.type = "triangle"; o.frequency.value = f; g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .15);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + .15);
+  });
+}
+
+// ---------- drawing ----------
+const X = x => ox + x * k, Y = y => oy + y * k;
+function circle(x, y, r, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, 7); ctx.fill(); }
+function draw(now) {
+  ctx.fillStyle = "#070a1a"; ctx.fillRect(0, 0, W, H);
+  for (const [x, y, r, p] of bg) { ctx.globalAlpha = .4 + .4 * Math.sin(now / 900 + p); circle(x, y, r, "#fff"); }
+  ctx.globalAlpha = 1;
+  if (!L) return;
+  ctx.strokeStyle = "#ffffff1c"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(X(0), Y(0), 1000 * k, 640 * k, 16 * k); ctx.stroke();
+  for (const pl of L.planets) {
+    const x = X(pl.x), y = Y(pl.y), r = pl.r * k;
+    const at = ctx.createRadialGradient(x, y, r * .9, x, y, r * 1.5);
+    at.addColorStop(0, `hsla(${pl.hue},80%,65%,.35)`); at.addColorStop(1, `hsla(${pl.hue},80%,65%,0)`);
+    circle(x, y, r * 1.5, at);
+    if (pl.ring) { ctx.strokeStyle = `hsla(${pl.hue + 30},70%,75%,.5)`; ctx.lineWidth = r * .12; ctx.beginPath(); ctx.ellipse(x, y, r * 1.6, r * .4, -.35, Math.PI, Math.PI * 2); ctx.stroke(); }
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .35, r * .1, x, y, r);
+    g.addColorStop(0, `hsl(${pl.hue},70%,68%)`); g.addColorStop(1, `hsl(${pl.hue},60%,28%)`);
+    circle(x, y, r, g);
+    for (const [cx, cy, cr] of pl.craters) if (cx * cx + cy * cy < .45) circle(x + cx * r, y + cy * r, cr * r, "rgba(0,0,0,.15)");
+    if (pl.ring) { ctx.beginPath(); ctx.ellipse(x, y, r * 1.6, r * .4, -.35, 0, Math.PI); ctx.stroke(); }
+  }
+  // hole: swirling portal + flag
+  const hx = X(L.hole[0]), hy = Y(L.hole[1]);
+  circle(hx, hy, HOLE * k * 1.8, "rgba(255,209,102,.12)");
+  ctx.lineWidth = 2.5 * k;
+  for (let i = 0; i < 3; i++) {
+    ctx.strokeStyle = `rgba(255,209,102,${.9 - i * .25})`; ctx.beginPath();
+    ctx.arc(hx, hy, (HOLE - i * 5) * k, now / (300 + i * 150) + i, now / (300 + i * 150) + i + 4); ctx.stroke();
+  }
+  circle(hx, hy, 6 * k, "#000");
+  ctx.strokeStyle = "#ddd"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(hx, hy - 6 * k); ctx.lineTo(hx, hy - 46 * k); ctx.stroke();
+  const wave = Math.sin(now / 250) * 3 * k;
+  ctx.fillStyle = "#ff5a7a"; ctx.beginPath(); ctx.moveTo(hx, hy - 46 * k); ctx.lineTo(hx + 26 * k, hy - 39 * k + wave); ctx.lineTo(hx, hy - 32 * k); ctx.fill();
+  // trail + ball
+  trail.forEach(([x, y], i) => { ctx.globalAlpha = i / trail.length * .6; circle(X(x), Y(y), BR * k * i / trail.length, "#9fd8ff"); });
+  ctx.globalAlpha = 1;
+  const br = BR * k * (1 - sink);
+  circle(X(ball[0]), Y(ball[1]), br * 2.6, "rgba(160,220,255,.18)");
+  circle(X(ball[0]), Y(ball[1]), br, "#fff");
+  // aim: power line + predicted path
+  if (aim && mode === "aim") {
+    const dx = aim.s[0] - aim.e[0], dy = aim.s[1] - aim.e[1], len = Math.min(170, Math.hypot(dx, dy));
+    if (len > 8) {
+      const a = Math.atan2(dy, dx), pw = len / 170 * 720, p = [...ball], v = [Math.cos(a) * pw, Math.sin(a) * pw];
+      for (let i = 0; i < 90; i++) {
+        for (let j = 0; j < 4; j++) step(p, v, 1 / 240);
+        if (i % 3 === 0) { ctx.globalAlpha = 1 - i / 90; circle(X(p[0]), Y(p[1]), 2.4 * k, "#fff"); }
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = `hsl(${120 - len / 170 * 120},90%,60%)`; ctx.lineWidth = 4 * k; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(X(ball[0]), Y(ball[1])); ctx.lineTo(X(ball[0] - Math.cos(a) * len * .5), Y(ball[1] - Math.sin(a) * len * .5)); ctx.stroke();
+    }
+  }
+}
+let last = performance.now();
+function frame(now) { const dt = Math.min(.033, (now - last) / 1000); last = now; update(dt); draw(now); requestAnimationFrame(frame); }
+
+c.addEventListener("pointerdown", e => { if (mode !== "aim") return; ac ||= new AudioContext(); aim = { s: toWorld(e), e: toWorld(e) }; c.setPointerCapture(e.pointerId); });
+c.addEventListener("pointermove", e => aim && (aim.e = toWorld(e)));
+c.addEventListener("pointerup", () => { if (!aim) return; shoot(aim.s[0] - aim.e[0], aim.s[1] - aim.e[1]); aim = null; });
+function showMenu() {
+  grid.innerHTML = LEVELS.map((_, i) => `<button data-i="${i}">${i + 1}<small>${[0, 1, 2].map(j => j < (starsSaved[i] || 0) ? "★" : "☆").join("")}</small></button>`).join("");
+  menu.hidden = false; done.hidden = true;
+}
+grid.onclick = e => { const b = e.target.closest("button"); if (b) load(+b.dataset.i); };
+lv.onclick = showMenu;
+rs.onclick = () => L && load(li);
+again.onclick = () => load(li);
+next.onclick = () => li + 1 < LEVELS.length ? load(li + 1) : showMenu();
+fit(); showMenu(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

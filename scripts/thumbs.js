@@ -31,6 +31,32 @@ const setup = {
     });
     await p.waitForTimeout(600);
   },
+  "stack-tower": async p => {
+    await p.keyboard.press("Space");
+    for (let i = 0; i < 16; i++) { await p.evaluate(i => { const t = stack.at(-1); moving[axis] = t[axis] + (i % 4 ? .35 : 0); drop(); }, i); }
+    await p.evaluate(() => moving[axis] = stack.at(-1)[axis] - 6);
+    await p.waitForTimeout(300);
+  },
+  "gravity-golf": async p => {
+    await p.evaluate(() => { load(3); trail = []; aim = { s: [300, 300], e: [180, 380] }; });
+    await p.waitForTimeout(300);
+  },
+  "word-rain": async p => {
+    await p.keyboard.press("Enter");
+    await p.evaluate(() => {
+      level = 3;
+      for (let i = 0; i < 6; i++) { spawn(); words.at(-1).y = 60 + i * 70; }
+      words[2].kind = "gold"; words[2].el.className = "w gold"; words[4].kind = "bomb"; words[4].el.className = "w bomb";
+      target = words[5]; target.typed = 2; words.forEach(paint);
+      score = 128; combo = 7; hud();
+    });
+    await p.waitForTimeout(400);
+  },
+  "mine-grid": async p => {
+    await p.click('[data-s="medium"]');
+    await p.evaluate(() => { click(136); cells.forEach((c, i) => c.mine && Math.random() < .5 && near(i).some(j => cells[j].open) && flag(i)); });
+    await p.waitForTimeout(900);
+  },
   chess: async p => {
     await p.evaluate(() => {
       for (const m of ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+", "Nc3"]) lastMove = game.move(m);

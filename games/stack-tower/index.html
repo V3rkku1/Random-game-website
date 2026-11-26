@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stack Tower</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; overflow: hidden; font-family: Inter, system-ui, sans-serif; color: #fff; user-select: none; touch-action: none; background: #222; }
+  canvas { display: block; }
+  #score { position: fixed; top: 6vh; width: 100%; text-align: center; font: 800 clamp(48px, 10vw, 84px) Inter, sans-serif; text-shadow: 0 4px 20px rgba(0,0,0,.2); pointer-events: none; }
+  #msg { position: fixed; inset: 0; display: grid; place-content: start center; padding-top: 6vh; text-align: center; gap: 8px; pointer-events: none; text-shadow: 0 2px 12px rgba(0,0,0,.25); }
+  #msg h1 { margin: 0; font-size: clamp(36px, 8vw, 60px); font-weight: 800; letter-spacing: -.03em; }
+  #msg p { margin: 0; opacity: .85; font-weight: 500; }
+  #msg .cta { margin-top: 12px; animation: breathe 1.6s infinite; }
+  #msg > * { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) backwards; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  @keyframes breathe { 50% { opacity: .4; } }
+  #perfect { position: fixed; top: 20vh; width: 100%; text-align: center; font-weight: 800; font-size: 22px; opacity: 0; pointer-events: none; }
+  #perfect.show { animation: perf .8s ease-out; }
+  @keyframes perf { 0% { opacity: 0; transform: scale(.5); } 20% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0; transform: translateY(-30px); } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="score"></div><div id="perfect"></div><div id="msg"></div>
+<script>
+// Canvas 2D isometric boxes; no 3D library needed for flat-shaded blocks.
+const ctx = c.getContext("2d"), BASE = 10, BH = 1, store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
+let W, H, S, stack, moving, chunks, ripples, score, combo, state = "menu", axis, dirSign, cam = 0, zoom = 1, hue0, ac;
+let best = +store("stackBest") || 0;
+
+function fit() {
+  const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight;
+  c.width = W * d; c.height = H * d; c.style.width = W + "px"; c.style.height = H + "px"; ctx.setTransform(d, 0, 0, d, 0, 0);
+  S = Math.min(W, H * .9) / 24;
+}
+addEventListener("resize", fit);
+
+function reset() {
+  hue0 = Math.random() * 360;
+  stack = [{ x: -BASE / 2, z: -BASE / 2, w: BASE, d: BASE, y: 0, hue: hue0 }];
+  chunks = []; ripples = []; score = 0; combo = 0; zoom = 1; spawn();
+}
+function spawn() {
+  const top = stack.at(-1);
+  axis = stack.length % 2 ? "x" : "z"; dirSign = 1;
+  moving = { ...top, y: top.y + BH, hue: (hue0 + stack.length * 7) % 360 };
+  moving[axis] = top[axis] - 12;
+}
+function drop() {
+  const top = stack.at(-1), k = axis, size = k === "x" ? "w" : "d";
+  let delta = moving[k] - top[k];
+  if (Math.abs(delta) < .25) { // perfect: snap, and every 3rd in a row grows the block back
+    moving[k] = top[k]; combo++;
+    if (combo >= 3 && moving[size] < BASE) { const g = Math.min(.8, BASE - moving[size]); moving[size] += g; moving[k] -= g / 2; }
+    ripples.push({ b: { ...moving }, t: 0 });
+    perfect.textContent = combo > 1 ? `Perfect ×${combo}` : "Perfect!";
+    perfect.classList.remove("show"); void perfect.offsetWidth; perfect.classList.add("show");
+    beep(440 * Math.pow(2, Math.min(combo, 14) / 12), .15);
+  } else {
+    combo = 0;
+    const overlap = top[size] - Math.abs(delta);
+    if (overlap <= 0) { chunks.push({ ...moving, vy: 0 }); return over(); }
+    const chunk = { ...moving, vy: 0 };
+    if (delta > 0) { chunk[k] = top[k] + top[size]; chunk[size] = delta; }
+    else { chunk[k] = moving[k]; chunk[size] = -delta; moving[k] = top[k]; }
+    moving[size] = overlap; chunks.push(chunk);
+    beep(260, .08, "triangle");
+  }
+  stack.push(moving); score++; spawn();
+}
+function over() {
+  state = "over"; beep(150, .4, "sawtooth", .1);
+  const isBest = score > best; if (isBest) { best = score; store("stackBest", best); }
+  setTimeout(() => msg.innerHTML = `<h1>${score}</h1><p>${isBest && score ? "New best!" : "Best " + best}</p><p class="cta">Tap or press space to restart</p>`, 700);
+}
+function start() { ac ||= new AudioContext(); reset(); state = "play"; msg.innerHTML = ""; }
+function beep(f, dur, type = "sine", vol = .12) {
+  if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = type; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+}
+
+// ---------- drawing ----------
+let cy;
+const P = (x, y, z) => [W / 2 + (x - z) * S * zoom * .866, cy + (x + z) * S * zoom * .5 - y * S * zoom];
+function poly(pts, fill) { ctx.fillStyle = fill; ctx.beginPath(); pts.forEach(p => ctx.lineTo(...p)); ctx.closePath(); ctx.fill(); }
+function box({ x, z, w, d, y, hue }, h = BH, a = 1) {
+  ctx.globalAlpha = a;
+  poly([P(x, y + h, z), P(x + w, y + h, z), P(x + w, y + h, z + d), P(x, y + h, z + d)], `hsl(${hue},70%,68%)`);
+  poly([P(x + w, y, z), P(x + w, y, z + d), P(x + w, y + h, z + d), P(x + w, y + h, z)], `hsl(${hue},55%,54%)`);
+  poly([P(x, y, z + d), P(x + w, y, z + d), P(x + w, y + h, z + d), P(x, y + h, z + d)], `hsl(${hue},50%,44%)`);
+  ctx.globalAlpha = 1;
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (state === "play") {
+    const top = stack.at(-1), sp = Math.min(22, 9 + score * .3);
+    moving[axis] += dirSign * sp * dt;
+    if (moving[axis] > top[axis] + 12) dirSign = -1;
+    if (moving[axis] < top[axis] - 12) dirSign = 1;
+  }
+  const h = stack.at(-1).y;
+  // game over: zoom out to show the whole tower
+  const tz = state === "over" ? Math.min(1, H * .55 / ((h + 12) * S)) : 1;
+  zoom += (tz - zoom) * Math.min(1, dt * 3);
+  cam += ((state === "over" ? h / 2 : h) - cam) * Math.min(1, dt * 6);
+  cy = H * .62 + cam * S * zoom;
+
+  const hb = (hue0 + h * 7) % 360, g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, `hsl(${hb},55%,78%)`); g.addColorStop(1, `hsl(${(hb + 40) % 360},50%,55%)`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  chunks.forEach(ch => { ch.vy -= 40 * dt; ch.y += ch.vy * dt; });
+  chunks = chunks.filter(ch => ch.y > cam - 40);
+  const behind = ch => ch.x + ch.w / 2 + ch.z + ch.d / 2 < 0;
+  chunks.filter(behind).forEach(ch => box(ch));
+  box({ x: -BASE / 2, z: -BASE / 2, w: BASE, d: BASE, y: -30, hue: hue0 }, 30); // pedestal
+  for (let i = Math.max(1, stack.length - 60); i < stack.length; i++) box(stack[i]);
+  if (state === "play") box(moving);
+  chunks.filter(ch => !behind(ch)).forEach(ch => box(ch));
+  ripples = ripples.filter(r => (r.t += dt * 1.6) < 1);
+  for (const { b, t } of ripples) {
+    const e = 1 + t * .5, cx = b.x + b.w / 2, cz = b.z + b.d / 2, hw = b.w / 2 * e, hd = b.d / 2 * e, y = b.y + BH;
+    ctx.strokeStyle = `rgba(255,255,255,${1 - t})`; ctx.lineWidth = 3;
+    ctx.beginPath(); [P(cx - hw, y, cz - hd), P(cx + hw, y, cz - hd), P(cx + hw, y, cz + hd), P(cx - hw, y, cz + hd)].forEach(p => ctx.lineTo(...p)); ctx.closePath(); ctx.stroke();
+  }
+  score_.textContent = state === "play" ? score : "";
+  requestAnimationFrame(frame);
+}
+const score_ = document.getElementById("score");
+
+const act = () => state === "play" ? drop() : start();
+addEventListener("pointerdown", act);
+addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); act(); } });
+
+fit(); reset();
+msg.innerHTML = `<h1>Stack Tower</h1><p>Drop each block on the one below.</p><p>Perfect drops in a row grow it back.</p><p class="cta">Tap or press space</p>`;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

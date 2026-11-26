@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mine Grid</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+    background: #f3f1ec; color: #2a2a2e; font: 600 15px Inter, system-ui, sans-serif; user-select: none; -webkit-touch-callout: none; }
+  #bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; margin-bottom: 14px; }
+  button { font: 600 14px Inter, sans-serif; border: 0; border-radius: 10px; padding: 8px 14px; background: #e4e1da; color: #2a2a2e; cursor: pointer; }
+  button[aria-pressed="true"] { background: #2a2a2e; color: #fff; }
+  .stat { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; font-size: 18px; }
+  #face { font-size: 24px; background: none; padding: 4px 8px; transition: transform .2s; }
+  #face:hover { transform: scale(1.15) rotate(-8deg); }
+  #wrap { max-width: 100%; overflow: auto; padding: 4px; }
+  #grid { display: grid; gap: 2px; padding: 8px; background: #d9d5cc; border-radius: 14px; box-shadow: 0 20px 50px -20px #0005; }
+  #grid.shake { animation: shake .4s; }
+  @keyframes shake { 20% { transform: translate(-6px, 3px); } 40% { transform: translate(5px, -4px); } 60% { transform: translate(-4px, 2px); } 80% { transform: translate(3px, -1px); } }
+  .c {
+    width: var(--s); height: var(--s); border: 0; padding: 0; border-radius: 6px; font: 800 calc(var(--s) * .52) Inter, sans-serif;
+    background: linear-gradient(#7c9cff, #5d7ef0); box-shadow: inset 0 -3px 0 #0002, inset 0 2px 0 #fff4; cursor: pointer; transition: background .15s, transform .1s;
+    display: grid; place-items: center;
+  }
+  .c:hover:not(.o) { background: linear-gradient(#93adff, #6f8cf5); }
+  .c:active:not(.o) { transform: scale(.92); }
+  .c.o { background: #faf9f6; box-shadow: none; cursor: default; animation: open .25s backwards; animation-delay: var(--d, 0s); }
+  @keyframes open { from { transform: scale(.4); background: #7c9cff; } }
+  .c.f::after { content: "🚩"; font-size: calc(var(--s) * .55); animation: plant .3s cubic-bezier(.2, 1.8, .4, 1); }
+  @keyframes plant { from { transform: translateY(-10px) scale(.4); } }
+  .c.m { background: #ffd8d2; animation: boom .35s backwards; animation-delay: var(--d, 0s); }
+  .c.m::after { content: "💣"; font-size: calc(var(--s) * .55); }
+  .c.x { background: #ff5a4d; }
+  .c.wrong { background: #ffe9a8; }
+  @keyframes boom { 0% { transform: scale(.2); } 60% { transform: scale(1.3); } }
+  .n1 { color: #3b6cf0; } .n2 { color: #2f9e55; } .n3 { color: #e5484d; } .n4 { color: #7b3fe4; } .n5 { color: #c2410c; } .n6 { color: #0e9aa7; } .n7 { color: #2a2a2e; } .n8 { color: #888; }
+  #msg { height: 24px; margin-top: 12px; color: #6b6b72; }
+  .conf { position: fixed; width: 8px; height: 12px; top: -20px; pointer-events: none; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <button data-s="easy">Easy</button><button data-s="medium">Medium</button><button data-s="hard">Hard</button>
+  <span class="stat" id="mines"></span><button id="face" aria-label="New game">🙂</button><span class="stat" id="time">0</span>
+  <button id="flagMode" aria-pressed="false" title="Tap mode: flag">🚩 Flag mode</button>
+</div>
+<div id="wrap"><div id="grid"></div></div>
+<div id="msg">Right-click or long-press to flag · click a number to clear around it</div>
+<script>
+// Plain DOM grid; flood fill is BFS so reveal animation can be staggered by distance.
+const SIZES = { easy: [9, 9, 10, 40], medium: [16, 16, 40, 32], hard: [30, 16, 99, 28] }; // cols, rows, mines, cell px
+const store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
+let size = store("mineSize") || "easy", cols, rows, total, cells, els, started, over, opened, flags, timer, t0;
+
+function newGame() {
+  [cols, rows, total] = SIZES[size];
+  const px = Math.min(SIZES[size][3], Math.floor((innerWidth - 60) / cols));
+  grid.style.setProperty("--s", Math.max(px, 24) + "px");
+  grid.style.gridTemplateColumns = `repeat(${cols}, var(--s))`;
+  cells = Array.from({ length: cols * rows }, () => ({ mine: false, n: 0, open: false, flag: false }));
+  grid.innerHTML = cells.map((_, i) => `<button class="c" data-i="${i}"></button>`).join("");
+  els = [...grid.children];
+  started = over = false; opened = flags = 0; clearInterval(timer); time.textContent = 0; face.textContent = "🙂";
+  document.querySelectorAll("[data-s]").forEach(b => b.setAttribute("aria-pressed", b.dataset.s === size));
+  const b = store("mineBest_" + size); msg.textContent = b ? `Best ${b}s on ${size}` : "Right-click or long-press to flag · click a number to clear around it";
+  hud();
+}
+const near = i => {
+  const x = i % cols, y = i / cols | 0, out = [];
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const X = x + dx, Y = y + dy;
+    if ((dx || dy) && X >= 0 && Y >= 0 && X < cols && Y < rows) out.push(Y * cols + X);
+  }
+  return out;
+};
+function plant(safe) { // first click and its neighbours are always safe
+  const banned = new Set([safe, ...near(safe)]);
+  const spots = cells.map((_, i) => i).filter(i => !banned.has(i)).sort(() => Math.random() - .5).slice(0, total);
+  spots.forEach(i => cells[i].mine = true);
+  cells.forEach((c, i) => c.n = near(i).filter(j => cells[j].mine).length);
+  started = true; t0 = Date.now(); timer = setInterval(() => time.textContent = (Date.now() - t0) / 1000 | 0, 250);
+}
+function reveal(start) {
+  const q = [[start, 0]], seen = new Set([start]);
+  while (q.length) {
+    const [i, d] = q.shift(), c = cells[i];
+    if (c.open || c.flag) continue;
+    c.open = true; opened++;
+    const e = els[i]; e.classList.add("o"); e.style.setProperty("--d", d * 0.025 + "s");
+    if (c.n) { e.textContent = c.n; e.classList.add("n" + c.n); }
+    else for (const j of near(i)) if (!seen.has(j)) { seen.add(j); q.push([j, d + 1]); }
+  }
+}
+function click(i) {
+  if (over) return;
+  const c = cells[i];
+  if (!started) plant(i);
+  if (c.flag) return;
+  if (c.open) { // chord: number with matching flags clears its neighbours
+    const nb = near(i);
+    if (c.n && nb.filter(j => cells[j].flag).length === c.n) for (const j of nb) if (!cells[j].open && !cells[j].flag) { if (cells[j].mine) return lose(j); reveal(j); }
+  } else if (c.mine) return lose(i);
+  else reveal(i);
+  pop(); checkWin();
+}
+function flag(i) {
+  const c = cells[i]; if (over || c.open) return;
+  c.flag = !c.flag; flags += c.flag ? 1 : -1; els[i].classList.toggle("f", c.flag); hud(); beep(c.flag ? 700 : 400, .05);
+}
+function lose(i) {
+  over = true; clearInterval(timer); face.textContent = "😵"; els[i].classList.add("x");
+  grid.classList.remove("shake"); void grid.offsetWidth; grid.classList.add("shake");
+  beep(90, .5, "sawtooth");
+  const [x0, y0] = [i % cols, i / cols | 0];
+  cells.forEach((c, j) => {
+    const d = Math.hypot(j % cols - x0, (j / cols | 0) - y0) * .04 + "s";
+    if (c.mine && !c.flag) { els[j].classList.add("m"); els[j].style.setProperty("--d", d); }
+    if (!c.mine && c.flag) els[j].classList.add("wrong");
+  });
+  msg.textContent = "Boom. Click the face to try again.";
+}
+function checkWin() {
+  if (opened !== cols * rows - total) return;
+  over = true; clearInterval(timer); face.textContent = "😎";
+  cells.forEach((c, i) => { if (c.mine && !c.flag) { c.flag = true; els[i].classList.add("f"); } });
+  flags = total; hud();
+  const t = (Date.now() - t0) / 1000 | 0, b = +store("mineBest_" + size) || Infinity;
+  if (t < b) store("mineBest_" + size, t);
+  msg.textContent = t < b ? `Cleared in ${t}s · new best!` : `Cleared in ${t}s · best ${b}s`;
+  [523, 659, 784, 1047].forEach((f, k) => setTimeout(() => beep(f, .15, "triangle"), k * 90));
+  for (let k = 0; k < 80; k++) { // confetti
+    const p = document.createElement("div"); p.className = "conf"; p.style.left = Math.random() * 100 + "vw"; p.style.background = `hsl(${Math.random() * 360},85%,60%)`;
+    document.body.append(p);
+    p.animate([{ transform: "none" }, { transform: `translate(${(Math.random() - .5) * 200}px, 110vh) rotate(${Math.random() * 900}deg)` }], { duration: 1800 + Math.random() * 1500, delay: Math.random() * 400, easing: "cubic-bezier(.3,.5,.6,1)" }).onfinish = () => p.remove();
+  }
+}
+function hud() { mines.textContent = "💣 " + (total - flags); }
+let ac;
+function beep(f, d, type = "sine") {
+  ac ||= new AudioContext();
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = type; o.frequency.value = f; g.gain.setValueAtTime(.08, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d);
+}
+const pop = () => beep(520 + Math.random() * 80, .05, "triangle");
+
+// input: left click reveals, right click / long press / flag mode flags
+let press, longFired;
+grid.addEventListener("pointerdown", e => {
+  const b = e.target.closest(".c"); if (!b || e.button === 2) return;
+  longFired = false; face.textContent = over ? face.textContent : "😮";
+  press = setTimeout(() => { longFired = true; flag(+b.dataset.i); navigator.vibrate?.(30); }, 380);
+});
+grid.addEventListener("pointerup", e => {
+  clearTimeout(press); if (!over) face.textContent = "🙂";
+  const b = e.target.closest(".c"); if (!b || e.button === 2 || longFired) return;
+  flagMode.getAttribute("aria-pressed") === "true" && !cells[+b.dataset.i].open ? flag(+b.dataset.i) : click(+b.dataset.i);
+});
+grid.addEventListener("pointerleave", () => clearTimeout(press));
+grid.addEventListener("contextmenu", e => { e.preventDefault(); const b = e.target.closest(".c"); if (b) flag(+b.dataset.i); });
+document.querySelectorAll("[data-s]").forEach(b => b.onclick = () => { size = b.dataset.s; store("mineSize", size); newGame(); });
+face.onclick = newGame;
+flagMode.onclick = () => flagMode.setAttribute("aria-pressed", flagMode.getAttribute("aria-pressed") !== "true");
+newGame();
+</script>
+</body>
+</html>

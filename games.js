@@ -8,4 +8,8 @@ window.GAMES = [
   { id: "guess-the-car", thumb: "thumbs/guess-the-car.jpg", title: "Guess the Car", desc: "Millionaire-style quiz about cars, F1, rally and MotoGP.", tags: ["quiz", "cars"], emoji: "🏎️", colors: ["#f59e0b"], src: "https://v3rkku1.github.io/Guess-the-car/" },
   { id: "chess", thumb: "thumbs/chess.jpg", title: "Chess", desc: "Classic chess. Drag or tap to move, play the computer or a friend.", tags: ["strategy", "board"], emoji: "♟️", colors: ["#b58863"] },
   { id: "raumschach", thumb: "thumbs/raumschach.jpg", title: "Raumschach", desc: "3D chess on a 5×5×5 glass board. Rotate, zoom, conquer.", tags: ["strategy", "board", "3d"], emoji: "🧊", colors: ["#a48bff"] },
+  { id: "stack-tower", thumb: "thumbs/stack-tower.jpg", title: "Stack Tower", desc: "Drop sliding blocks. Overhang gets sliced. Perfect drops chain combos.", tags: ["arcade", "one-button"], emoji: "🧱", colors: ["#f59e9e"] },
+  { id: "gravity-golf", thumb: "thumbs/gravity-golf.jpg", title: "Gravity Golf", desc: "Minigolf in space. Slingshot around planets into the hole.", tags: ["puzzle", "physics"], emoji: "🪐", colors: ["#6366f1"] },
+  { id: "word-rain", thumb: "thumbs/word-rain.jpg", title: "Word Rain", desc: "Type falling words before they hit the ground.", tags: ["typing", "arcade"], emoji: "🌧️", colors: ["#3b82f6"] },
+  { id: "mine-grid", thumb: "thumbs/mine-grid.jpg", title: "Mine Grid", desc: "Reveal safe cells, flag the mines. Numbers count nearby bombs.", tags: ["puzzle", "classic"], emoji: "💣", colors: ["#5d7ef0"] },
 ];
