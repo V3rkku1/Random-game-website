@@ -26,6 +26,7 @@
   .sq.move::before { content: ""; position: absolute; inset: 37%; border-radius: 50%; background: rgba(0, 0, 0, .22); z-index: 1; animation: dot .2s; }
   .sq.cap::before { content: ""; position: absolute; inset: 3%; border-radius: 50%; border: calc(var(--sq) * .08) solid rgba(0, 0, 0, .22); z-index: 1; animation: dot .2s; }
   .sq.shot::before { content: "🎯"; position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--sq) * .45); z-index: 3; animation: dot .2s; opacity: .85; }
+  .pellet { position: absolute; left: 0; top: 0; width: calc(var(--sq) * .1); height: calc(var(--sq) * .1); margin: calc(var(--sq) * -.05); border-radius: 50%; background: #ffcf5a; box-shadow: 0 0 8px #ff8a00; z-index: 6; }
   .ammo { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); }
   .ammo b { color: #ffb347; letter-spacing: 2px; }
   .rules { color: var(--muted); font-size: 13px; line-height: 1.45; }
@@ -94,11 +95,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script>
 // Chess + shotgun: chess.js does the rules; a shot = remove piece and pass the turn via FEN.
-// Skipped: shots inside AI search tree (only considered at root), threefold detection across shots/undo.
+// Skipped: shots inside AI search tree (only considered at root).
 const game = new Chess(), FILES = "abcdefgh", SHELLS = 2;
 const G = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" }, VS = "︎";
 let flipped = false, ai = true, sel = null, busy = false, lastMove = null, drag = null, ac;
-let shells = { w: SHELLS, b: SHELLS }, log = [], stack = [];
+let shells = { w: SHELLS, b: SHELLS }, log = [], stack = [], seen = [];
+const key = () => game.fen().split(" ").slice(0, 4).join(" ") + shells.w + shells.b; // own repetition log: game.load() wipes chess.js history
 const $ = id => document.getElementById(id);
 const board = $("board"), pieces = $("pieces");
 
@@ -135,11 +137,12 @@ function shotTargets(from) {
       && Math.max(Math.abs(sq.charCodeAt(0) - from.charCodeAt(0)), Math.abs(sq[1] - from[1])) <= 2 && shotFen(sq);
   });
 }
-const allShots = () => ALL.flatMap(from => shotTargets(from).map(to => ({ from, to })));
+let shotCache = {};
+const allShots = () => shotCache[key()] ||= ALL.flatMap(from => shotTargets(from).map(to => ({ from, to })));
 function result() {
   if (!game.moves().length && !allShots().length) return game.in_check() ? "Checkmate" : "Stalemate";
   if (game.insufficient_material()) return "Insufficient material";
-  if (game.in_threefold_repetition()) return "Threefold repetition";
+  if (seen.filter(k => k === key()).length >= 3) return "Threefold repetition";
   if (game.in_draw()) return "50-move rule";
 }
 
@@ -208,7 +211,15 @@ function tone(f, cap) {
   g.gain.setValueAtTime(cap ? .25 : .15, t); g.gain.exponentialRampToValueAtTime(.001, t + .1);
   o.connect(g).connect(ac.destination); o.start(t); o.stop(t + .1);
 }
-function boom() { // white-noise blast + board kick
+function boom(from, to) { // pellet spray + white-noise blast + board kick
+  const q = board.clientWidth / 8, [fc, fr] = cell(from), [tc, tr] = cell(to);
+  for (let i = 0; i < 9; i++) {
+    const p = document.createElement("b"), jx = (Math.random() - .5) * .7 * q, jy = (Math.random() - .5) * .7 * q;
+    p.className = "pellet"; pieces.append(p);
+    p.animate([{ transform: `translate(${(fc + .5) * q}px, ${(fr + .5) * q}px)`, opacity: 1 },
+      { transform: `translate(${(tc + .5) * q + jx}px, ${(tr + .5) * q + jy}px)`, opacity: 0 }],
+      { duration: 220 + i * 12, easing: "ease-out" }).onfinish = () => p.remove();
+  }
   ac ||= new AudioContext();
   const n = ac.sampleRate * .4, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
@@ -218,9 +229,9 @@ function boom() { // white-noise blast + board kick
   board.animate([{ transform: "translate(0,0)", filter: "brightness(1.6)" }, { transform: "translate(-8px,4px)" }, { transform: "translate(6px,-5px)" },
     { transform: "translate(-3px,2px)" }, { transform: "translate(0,0)", filter: "brightness(1)" }], 300);
 }
-const save = () => stack.push({ fen: game.fen(), log: [...log], shells: { ...shells }, lastMove });
+const save = () => stack.push({ fen: game.fen(), log: [...log], shells: { ...shells }, lastMove, seen: [...seen] });
 function next() {
-  sel = null;
+  sel = null; seen.push(key());
   if (ai && game.turn() === "b" && !result()) { busy = true; setTimeout(aiMove, 350); }
   render();
 }
@@ -231,7 +242,7 @@ function shoot(from, to) {
   const s = game.get(from);
   save(); game.load(shotFen(to)); shells[s.color]--;
   log.push(`${s.type === "p" ? "" : s.type.toUpperCase()}${from}🔫${to}${game.in_check() ? "+" : ""}`);
-  lastMove = { from, to }; el(to)?.classList.add("gone"); boom(); setTimeout(sync, 260); next();
+  lastMove = { from, to }; el(to)?.classList.add("gone"); boom(from, to); setTimeout(sync, 260); next();
 }
 const pickPromo = () => new Promise(res => { $("promo").returnValue = ""; $("promo").onclose = () => res($("promo").returnValue || null); $("promo").showModal(); });
 async function tryMove(from, to) {
@@ -306,7 +317,7 @@ board.addEventListener("pointerup", async e => {
   if (!to || to === d.sq || !(await tryMove(d.sq, to))) d.el.style.transform = tf(d.sq);
 });
 
-function restore(s) { game.load(s.fen); log = s.log; shells = s.shells; lastMove = s.lastMove; }
+function restore(s) { game.load(s.fen); log = s.log; shells = s.shells; lastMove = s.lastMove; seen = s.seen; }
 $("undo").onclick = () => {
   if (busy || !stack.length) return;
   restore(stack.pop()); if (ai && game.turn() === "b" && stack.length) restore(stack.pop());
@@ -316,9 +327,9 @@ $("flip").onclick = () => { flipped = !flipped; sync(); render(); };
 $("mode").onclick = () => { ai = !ai; next(); };
 $("new").onclick = $("again").onclick = () => {
   if (busy) return;
-  game.reset(); lastMove = sel = null; log = []; stack = []; shells = { w: SHELLS, b: SHELLS }; sync(); render();
+  game.reset(); lastMove = sel = null; log = []; stack = []; shells = { w: SHELLS, b: SHELLS }; seen = [key()]; sync(); render();
 };
-sync(); render();
+seen = [key()]; sync(); render();
 </script>
 </body>
 </html>
