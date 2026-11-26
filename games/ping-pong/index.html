@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping Pong</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow: hidden; background: #14161c; color: #eee; font: 500 15px Inter, system-ui, sans-serif; user-select: none; }
+  canvas { display: block; touch-action: none; cursor: none; }
+  #score { position: fixed; top: 12px; left: 0; right: 0; text-align: center; font: 800 28px Inter, sans-serif; pointer-events: none; text-shadow: 0 2px 8px #000; }
+  #score small { display: block; font: 500 13px Inter, sans-serif; color: #9a9ca5; }
+  #msg { position: fixed; left: 0; right: 0; top: 44%; text-align: center; font: 800 40px Inter, sans-serif; text-shadow: 0 4px 14px #000; pointer-events: none; transition: opacity .3s; }
+  #ov { position: fixed; inset: 0; display: grid; place-items: center; background: #0008; backdrop-filter: blur(3px); }
+  #ov[hidden] { display: none; }
+  #ov div { background: #23252d; padding: 26px 32px; border-radius: 16px; text-align: center; max-width: 400px; }
+  #ov h1 { margin: 0 0 8px; font-size: 32px; }
+  #ov p { color: #a6a8b2; line-height: 1.5; margin: 0 0 16px; }
+  #ov button { font: 700 15px Inter, sans-serif; border: 0; border-radius: 10px; padding: 10px 18px; margin: 3px; cursor: pointer; background: #3a3c45; color: #eee; }
+  #ov button:hover { background: #ff5a4e; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="score"></div><div id="msg"></div>
+<div id="ov"><div><h1 id="ovT">Ping Pong</h1>
+  <p id="ovP">Move to place your paddle. It hits the ball when they meet.<br>Swing sideways to angle the shot, and swing forward to hit harder (it may go long).<br>Click or tap to serve. First to 11 wins, by 2.</p>
+  <button data-d="0">Easy</button><button data-d="1">Normal</button><button data-d="2">Hard</button></div></div>
+<script>
+// Canvas 2D + hand-rolled ball physics (height via shadow), no libraries. Units: metres, real table size.
+// shortcut: serves skip the "bounce on own side first" rule; add if anyone cares.
+const L = 2.74, W = 1.525, NET = .1525, G = 9.8, TS = .7, R = .17; // R = paddle reach
+const $ = id => document.getElementById(id), cv = $("c"), g = cv.getContext("2d");
+const AI = [{ speed: 1.5, err: .35, power: 1 }, { speed: 2.3, err: .2, power: 2 }, { speed: 3.3, err: .1, power: 3 }];
+let sc, cx, cy, ai, phase = "menu", score, server, last, bounces, wait = 0, t = 0, hits = 0;
+const ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
+const me = { x: 0, y: L / 2 + .25, vx: 0, vy: 0, tx: 0, ty: L / 2 + .25 }, bot = { x: 0, y: -L / 2 - .25 };
+
+function resize() {
+  cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
+  sc = Math.min(innerWidth / (W + 1.4), innerHeight / (L + 1.5)) * devicePixelRatio; cx = cv.width / 2; cy = cv.height / 2 + 14 * devicePixelRatio;
+}
+addEventListener("resize", resize); resize();
+const S = (x, y) => [cx + x * sc, cy + y * sc];
+
+// ---------- input ----------
+cv.addEventListener("pointermove", e => {
+  const lift = e.pointerType === "touch" ? 70 : 0; // keep paddle visible above the finger
+  me.tx = (e.clientX * devicePixelRatio - cx) / sc; me.ty = ((e.clientY - lift) * devicePixelRatio - cy) / sc;
+});
+cv.addEventListener("pointerdown", e => { cv.dispatchEvent(new PointerEvent("pointermove", e)); if (phase === "serve" && server === "p") hit("p"); });
+document.querySelectorAll("#ov button").forEach(b => b.onclick = () => { ai = AI[b.dataset.d]; score = { p: 0, a: 0 }; server = "p"; $("ov").hidden = true; newPoint(); });
+
+// ---------- rules ----------
+function newPoint() { phase = "serve"; last = null; bounces = 0; hud(); if (server === "a") wait = 1.1; }
+function point(winner, why) {
+  if (phase !== "play") return;
+  score[winner]++; phase = "dead"; wait = 1.1; say(why); tone(winner === "p" ? 660 : 220, .2);
+  const n = score.p + score.a;
+  if (n % 2 === 0 || (score.p >= 10 && score.a >= 10)) server = server === "p" ? "a" : "p";
+  hud();
+}
+const other = s => s === "p" ? "a" : "p";
+function hit(s) { // aim from paddle motion (player) or skill + noise (bot); solve vz so ball lands at target
+  const dir = s === "p" ? -1 : 1, P = s === "p" ? me : bot;
+  let tx, depth, power;
+  if (s === "p") {
+    // tanh soft-limits fast mouse flicks: extreme swings land just wide/long, normal ones stay in
+    tx = W * .55 * Math.tanh((ball.x * .3 + (ball.x - P.x) * 2.5 + P.vx * .08) / (W / 2));
+    const fwd = Math.max(0, -P.vy); power = 4 * Math.tanh(fwd / 6); depth = .75 * Math.tanh(fwd / 6) - .1;
+  } else {
+    tx = (Math.random() - .5) * W * .7 + (Math.random() - .5) * W * ai.err * 2;
+    power = Math.random() * ai.power; depth = (Math.random() - .3) * .6 + (Math.random() < ai.err / 3 ? .9 : 0);
+  }
+  const ty = dir * (L / 4 + depth), dist = Math.abs(ty - ball.y), f = Math.abs(ball.y) / dist;
+  // lengthen flight time until the arc clears the net (bot sometimes aims low on purpose)
+  const clear = NET + (s === "a" && Math.random() < ai.err / 3 ? -.06 : .04), need = (clear - ball.z * (1 - f)) / (.5 * G * f * (1 - f));
+  let tt = dist / (3 + power); if (f < 1 && need > tt * tt) tt = Math.sqrt(need);
+  ball.vy = dir * dist / tt; ball.vx = (tx - ball.x) / tt; ball.vz = -ball.z / tt + .5 * G * tt;
+  last = s; bounces = 0; phase = "play"; hits++; tone(s === "p" ? 520 : 440, .06); hud();
+}
+
+// ---------- update ----------
+function step(dt) {
+  t += dt;
+  // player paddle: follow pointer, stay on own side
+  const nx = Math.max(-W / 2 - .7, Math.min(W / 2 + .7, me.tx)), ny = Math.max(.12, Math.min(L / 2 + .7, me.ty));
+  me.vx = me.vx * .5 + (nx - me.x) / dt * .5; me.vy = me.vy * .5 + (ny - me.y) / dt * .5; me.x = nx; me.y = ny;
+  // bot paddle: chase ball when it's coming, else go home
+  const coming = phase === "play" && ball.vy < 0 && last === "p";
+  const gx = coming ? ball.x : phase === "serve" && server === "a" ? bot.x : 0;
+  const gy = coming ? Math.min(-.2, Math.max(-L / 2 - .5, bounces ? ball.y - .05 : -L / 2 - .2)) : -L / 2 - .25;
+  const dx = gx - bot.x, dy = gy - bot.y, d = Math.hypot(dx, dy), m = Math.min(d, ai.speed * dt);
+  if (d > 1e-4) { bot.x += dx / d * m; bot.y += dy / d * m; }
+
+  if (phase === "serve") {
+    const P = server === "p" ? me : bot;
+    Object.assign(ball, { x: P.x, y: P.y + (server === "p" ? -.06 : .06), z: .2 + Math.abs(Math.sin(t * 4)) * .18, vx: 0, vy: 0, vz: 0 });
+    if (server === "a" && (wait -= dt) <= 0) hit("a");
+    return;
+  }
+  if (phase === "dead") { if ((wait -= dt) <= 0) end() || newPoint(); return physics(dt); }
+  if (phase === "play") physics(dt);
+}
+function physics(dt) {
+  const py = ball.y, pz = ball.z;
+  ball.vz -= G * dt; ball.x += ball.vx * dt; ball.y += ball.vy * dt; ball.z += ball.vz * dt;
+  if (Math.sign(py) !== Math.sign(ball.y) && ball.z < NET && Math.abs(ball.x) < W / 2 + .15) { // net
+    ball.y = py; ball.vy *= -.15; ball.vx *= .3; tone(120, .08);
+    if (phase === "play") say("Net");
+  }
+  if (pz >= 0 && ball.z < 0 && Math.abs(ball.x) <= W / 2 && Math.abs(ball.y) <= L / 2) { // table bounce
+    ball.z = 0; ball.vz = -ball.vz * .9; tone(300, .04);
+    const side = ball.y > 0 ? "p" : "a";
+    if (phase === "play") {
+      if (side === last) point(other(last), "Fault");
+      else if (++bounces === 2) point(last, "Double bounce");
+    }
+  }
+  if (ball.z < -.76) { // floor
+    ball.z = -.76; ball.vz = -ball.vz * .5; ball.vx *= .7; ball.vy *= .7;
+    if (phase === "play") bounces ? point(last, "Missed!") : point(other(last), "Out!");
+  }
+  // contact: only after the ball bounced once on your side
+  for (const [s, P] of [["p", me], ["a", bot]])
+    if (phase === "play" && last !== s && bounces === 1 && Math.hypot(ball.x - P.x, ball.y - P.y) < R && ball.z > -.1 && ball.z < .6) hit(s);
+}
+function end() {
+  const [a, b] = [score.p, score.a];
+  if (Math.max(a, b) < 11 || Math.abs(a - b) < 2) return false;
+  phase = "over"; $("ovT").textContent = a > b ? "You win!" : "You lose"; $("ovP").textContent = `${a} – ${b}. Play again?`; $("ov").hidden = false;
+  return true;
+}
+
+// ---------- draw ----------
+function draw() {
+  g.fillStyle = "#14161c"; g.fillRect(0, 0, cv.width, cv.height);
+  const [x0, y0] = S(-W / 2, -L / 2), lw = 2 * devicePixelRatio;
+  g.fillStyle = "#0b0c10"; g.fillRect(x0 + 10, y0 + 14, W * sc, L * sc); // table shadow
+  g.fillStyle = "#1d5fae"; g.fillRect(x0, y0, W * sc, L * sc);
+  g.strokeStyle = "#fff"; g.lineWidth = lw * 1.5; g.strokeRect(x0, y0, W * sc, L * sc);
+  g.lineWidth = lw * .7; g.beginPath(); g.moveTo(cx, y0); g.lineTo(cx, y0 + L * sc); g.stroke();
+  const shadow = (x, y, z) => { if (z > -.7) { const [sx, sy] = S(x + z * .15, y + z * .25), r = .025 * sc * (1 + z); g.fillStyle = `rgba(0,0,0,${.35 - z * .2})`; g.beginPath(); g.ellipse(sx, sy, r, r * .7, 0, 0, 7); g.fill(); } };
+  const paddle = (P, col, s) => {
+    const [px, py] = S(P.x, P.y), r = .085 * sc;
+    g.fillStyle = "#6b4a2b"; g.fillRect(px - r * .2, py + s * r * .7, r * .4, s * r * .9); // handle
+    g.fillStyle = col; g.strokeStyle = "#111"; g.lineWidth = lw; g.beginPath(); g.arc(px, py, r, 0, 7); g.fill(); g.stroke();
+  };
+  const drawBall = () => {
+    shadow(ball.x, ball.y, ball.z);
+    const [bx, by] = S(ball.x, ball.y - Math.max(ball.z, -.76) * .9), r = .028 * sc * (1 + Math.max(0, ball.z) * .8);
+    g.fillStyle = "#fff6e0"; g.beginPath(); g.arc(bx, by, r, 0, 7); g.fill();
+  };
+  paddle(bot, "#3b82f6", -1);
+  if (ball.y < 0) drawBall();
+  // net with posts
+  const [nx0, ny] = S(-W / 2 - .15, 0), nh = NET * .9 * sc;
+  g.fillStyle = "#ffffffcc"; g.fillRect(nx0, ny - nh, (W + .3) * sc, nh);
+  g.fillStyle = "#555"; for (let i = 0; i < 20; i++) g.fillRect(nx0 + i * (W + .3) * sc / 20, ny - nh, 1, nh);
+  g.fillStyle = "#222"; g.fillRect(nx0 - 4, ny - nh - 2, 6, nh + 4); g.fillRect(nx0 + (W + .3) * sc - 2, ny - nh - 2, 6, nh + 4);
+  if (ball.y >= 0) drawBall();
+  paddle(me, "#e5383b", 1);
+}
+
+// ---------- ui / sound ----------
+function hud() {
+  const dot = s => server === s && phase !== "over" ? " •" : "";
+  $("score").innerHTML = `You ${score.p}${dot("p")}  –  ${score.a}${dot("a")} CPU<small>${phase === "serve" && server === "p" ? "Click to serve" : "&nbsp;"}</small>`;
+}
+function say(s) { $("msg").textContent = s; $("msg").style.opacity = 1; clearTimeout(say.t); say.t = setTimeout(() => $("msg").style.opacity = 0, 900); }
+let ac;
+function tone(f, d) {
+  try { ac ||= new AudioContext(); } catch { return; }
+  const o = ac.createOscillator(), v = ac.createGain(), n = ac.currentTime;
+  o.type = "sine"; o.frequency.value = f; v.gain.setValueAtTime(.2, n); v.gain.exponentialRampToValueAtTime(.001, n + d);
+  o.connect(v).connect(ac.destination); o.start(n); o.stop(n + d);
+}
+
+let prev = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(.033, (now - prev) / 1000) * TS; prev = now;
+  if (phase !== "menu" && phase !== "over") step(dt);
+  draw();
+}
+ai = AI[1]; Object.assign(ball, { x: .2, y: -.4, z: .3 }); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

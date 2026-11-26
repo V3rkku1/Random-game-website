@@ -77,6 +77,12 @@ const setup = {
     });
     await p.waitForTimeout(300);
   },
+  "ping-pong": async p => {
+    await p.click("text=Normal");
+    await p.evaluate(() => { phase = "play"; last = "a"; score = { p: 7, a: 5 }; hud(); Object.assign(ball, { x: .25, y: .55, z: .3 }); me.tx = .3; me.ty = 1.25; bot.x = -.25; });
+    await p.waitForTimeout(100);
+    await p.evaluate(() => phase = "menu");
+  },
   chess: async p => {
     await p.evaluate(() => {
       for (const m of ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+", "Nc3"]) lastMove = game.move(m);
