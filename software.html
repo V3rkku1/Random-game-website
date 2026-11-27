@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Software · Random Games</title>
+  <meta name="description" content="Free Windows apps and tools: Steam Multitool, Mod Manager, LAN Skin Tester for CS2.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+</head>
+<body>
+  <nav>
+    <a class="logo" href="./">random games</a>
+    <div class="links"><a href="./#games">Games</a><a href="software.html" aria-current="page">Software</a></div>
+  </nav>
+
+  <header class="hero">
+    <h1>Software I made.</h1>
+    <p>Free tools and apps. Press 🔗 on a card to copy a link straight to it.</p>
+  </header>
+
+  <main>
+    <div class="toolbar"><div class="chips" id="chips"></div><span class="count" id="count"></span></div>
+    <div class="soft-grid" id="list"></div>
+  </main>
+
+  <footer>random games</footer>
+  <div class="toast" id="toast" hidden></div>
+
+  <!-- GitHub Pages caches 10 min; timestamp forces a fresh list -->
+  <script>document.write(`<script src="software.js?${Date.now()}"><\/script>`)</script>
+  <script>
+    // No framework: one list, one tag filter, a share button per card (#id links scroll to that card).
+    const $ = id => document.getElementById(id), apps = window.SOFTWARE;
+    const tags = ["all", ...new Set(apps.flatMap(a => a.tags))];
+    let tag = "all";
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    function render() {
+      $("chips").innerHTML = tags.map(t => `<button class="chip${t === tag ? " on" : ""}" data-t="${t}">${t}</button>`).join("");
+      const list = apps.filter(a => tag === "all" || a.tags.includes(tag));
+      $("count").textContent = `${list.length} project${list.length === 1 ? "" : "s"}`;
+      $("list").innerHTML = list.map(a => `
+        <article class="soft" id="${a.id}">
+          <div class="soft-head">
+            <div class="soft-icon" style="background:color-mix(in srgb, ${a.colors?.[0] || "#999"} 18%, var(--surface))">${a.icon ? `<img src="${a.icon}" alt="" width="56" height="56">` : a.emoji || "🛠️"}</div>
+            <div><h2>${esc(a.title)}</h2><p class="plat">${esc(a.platform)}</p></div>
+            <button class="share" data-share="${a.id}" aria-label="Copy link to ${esc(a.title)}" title="Copy link">🔗</button>
+          </div>
+          <p>${esc(a.desc)}</p>
+          ${a.features ? `<ul>${a.features.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+          ${a.note ? `<p class="note">⚠️ ${esc(a.note)}</p>` : ""}
+          <div class="soft-links">
+            ${(a.downloads || []).map(([l, u], i) => `<a class="btn${i ? " ghost" : ""}" href="${u}" rel="noopener">${i ? "" : "⬇ "}${esc(l)}</a>`).join("")}
+            <a class="btn ghost" href="${a.repo}" rel="noopener">GitHub</a>
+          </div>
+        </article>`).join("");
+      if (location.hash) document.querySelector(location.hash)?.classList.add("hl");
+    }
+    $("chips").onclick = e => { if (e.target.dataset.t) { tag = e.target.dataset.t; render(); } };
+    document.addEventListener("click", async e => {
+      const b = e.target.closest("[data-share]"); if (!b) return;
+      const a = apps.find(x => x.id === b.dataset.share), url = location.href.split("#")[0] + "#" + a.id;
+      if (navigator.share && matchMedia("(hover: none)").matches) { try { await navigator.share({ title: a.title, text: a.desc, url }); return; } catch {} }
+      try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch { prompt("Copy this link:", url); }
+    });
+    function toast(t) { $("toast").textContent = t; $("toast").hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => $("toast").hidden = true, 1600); }
+    render();
+  </script>
+</body>
+</html>

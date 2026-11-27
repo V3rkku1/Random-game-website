@@ -42,3 +42,7 @@ node scripts/thumbs.js my-game    # one game
 ```
 
 Then add `thumb: "thumbs/my-game.jpg"` to the game's entry. Games without a thumb show their emoji.
+
+## Software tab
+
+`software.html` lists projects from `software.js` (one entry per project: title, desc, platform, tags, repo, optional icon, features and download links). Each card's 🔗 button copies a link like `software.html#mod-manager` that opens the page on that card.

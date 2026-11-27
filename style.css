@@ -114,3 +114,25 @@ footer { max-width: 1100px; margin: auto; color: var(--muted); padding: 32px cla
   .info h3 { font-size: 15px; }
   .info p { font-size: 13px; }
 }
+
+/* software page */
+nav .links a[aria-current] { color: var(--text); }
+.soft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+.soft { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 20px; }
+.soft.hl { border-color: var(--text); }
+.soft-head { display: flex; align-items: center; gap: 14px; }
+.soft-head > div:nth-child(2) { flex: 1; min-width: 0; }
+.soft-icon { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; font-size: 30px; flex-shrink: 0; overflow: hidden; }
+.soft-icon img { width: 100%; height: 100%; object-fit: cover; }
+.soft h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.soft .plat { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.soft > p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.soft ul { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; list-style: none; }
+.soft li { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: var(--border); }
+.soft .note { font-size: 13px; color: var(--text); background: color-mix(in srgb, #f59e0b 14%, var(--surface)); padding: 8px 12px; border-radius: 10px; }
+.soft-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.soft-links .btn { padding: 9px 16px; font-size: 14px; }
+.share { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border); background: transparent; cursor: pointer; font-size: 16px; flex-shrink: 0; }
+.share:hover { border-color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 10px 18px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 500; }
+@media (max-width: 560px) { .soft-grid { grid-template-columns: 1fr; } nav .links a { margin-left: 16px; } }
