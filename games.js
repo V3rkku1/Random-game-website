@@ -29,4 +29,9 @@ window.GAMES = [
   { id: "rock-blaster", thumb: "thumbs/rock-blaster.jpg", title: "Rock Blaster", desc: "Thrust, turn and shoot. Split the space rocks before they split you.", tags: ["arcade", "shooter"], emoji: "🚀", colors: ["#6cf"] },
   { id: "lumen-grid", thumb: "thumbs/lumen-grid.jpg", title: "Lumen Grid", desc: "Each tap flips a light and its neighbours. Turn them all off.", tags: ["puzzle", "logic"], emoji: "💡", colors: ["#ffd54f"] },
   { id: "color-flood", thumb: "thumbs/color-flood.jpg", title: "Color Flood", desc: "Flood the board with one colour in 25 moves.", tags: ["puzzle"], emoji: "🎨", colors: ["#ef476f"] },
+  { id: "sky-hopper", thumb: "thumbs/sky-hopper.jpg", title: "Sky Hopper", desc: "3D endless runner on a road in the clouds. Switch lanes, jump, slide, grab rings.", tags: ["3d", "arcade", "runner"], emoji: "🤖", colors: ["#2ec4b6"] },
+  { id: "marble-tilt", thumb: "thumbs/marble-tilt.jpg", title: "Marble Tilt", desc: "Tilt the 3D board to roll the marble past holes and bridges to the goal. 6 levels.", tags: ["3d", "puzzle", "physics"], emoji: "🔵", colors: ["#7b4f9e"] },
+  { id: "strike-alley", thumb: "thumbs/strike-alley.jpg", title: "Strike Alley", desc: "10-frame bowling with real pin physics. Swipe to bowl, curve it for hook.", tags: ["3d", "sports", "physics"], emoji: "🎳", colors: ["#ff4d6d"] },
+  { id: "drift-circuit", thumb: "thumbs/drift-circuit.jpg", title: "Drift Circuit", desc: "3-lap race vs 3 rivals. Drift through corners to charge boost.", tags: ["3d", "racing"], emoji: "🏁", colors: ["#3a86ff"] },
+  { id: "ring-flyer", thumb: "thumbs/ring-flyer.jpg", title: "Ring Flyer", desc: "Glide over endless 3D mountains. Fly through rings to earn time.", tags: ["3d", "flying", "arcade"], emoji: "🛩️", colors: ["#ffc83d"] },
 ];

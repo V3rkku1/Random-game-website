@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strike Alley</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow: hidden; background: #120d1c; color: #fff; font: 600 15px system-ui, sans-serif; user-select: none; touch-action: none; }
+  canvas { display: block; }
+  #card { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); display: grid; grid-template-columns: repeat(9, 1fr) 1.5fr 1.2fr; width: min(96vw, 640px); background: #000a; border-radius: 10px; overflow: hidden; pointer-events: none; }
+  #card div { border-right: 1px solid #fff2; text-align: center; padding: 3px 0 4px; }
+  #card div.cur { background: #ff4d6d55; }
+  #card b { display: block; font-size: 10px; color: #fff8; font-weight: 600; }
+  #card i { display: block; font-style: normal; letter-spacing: 3px; min-height: 18px; }
+  #card span { display: block; font-size: 15px; min-height: 18px; }
+  #msg { position: fixed; inset: 0; display: grid; place-items: center; font: 900 min(12vw, 64px) system-ui; text-shadow: 0 4px 18px #000c; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  #help { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; color: #fffb; font-size: 13px; text-shadow: 0 1px 4px #000; pointer-events: none; }
+  #pad { position: fixed; bottom: 34px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+  #pad button { font: 800 16px system-ui; width: 52px; height: 44px; border: 0; border-radius: 12px; background: #ffffff22; color: #fff; backdrop-filter: blur(4px); }
+  #spinv { min-width: 80px; text-align: center; align-self: center; font-weight: 800; text-shadow: 0 1px 4px #000; }
+  #power { position: fixed; right: 14px; bottom: 90px; width: 14px; height: 160px; border-radius: 7px; background: #0008; overflow: hidden; opacity: 0; }
+  #power div { position: absolute; bottom: 0; width: 100%; background: linear-gradient(#ff4d6d, #ffd166, #5ef0a0); }
+  #ov { position: fixed; inset: 0; display: grid; place-items: center; background: #0008; backdrop-filter: blur(3px); }
+  #ov[hidden] { display: none; }
+  #ov > div { background: #241a36ee; padding: 26px 32px; border-radius: 18px; text-align: center; max-width: 440px; margin: 16px; }
+  #ov h1 { margin: 0 0 8px; font-size: 34px; }
+  #ov p { color: #d3c8ea; line-height: 1.55; margin: 0 0 16px; font-weight: 500; }
+  #ov button { font: 800 17px system-ui; border: 0; border-radius: 12px; padding: 12px 26px; cursor: pointer; background: #ff4d6d; color: #fff; }
+</style>
+</head>
+<body>
+<!-- three.js r128 for rendering + cannon-es for pin physics (hand-rolling pin-on-pin rigid bodies would be far more code) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<div id="card"></div>
+<div id="msg"></div>
+<div id="power"><div></div></div>
+<div id="pad"><button id="bl" aria-label="move left">◀</button><button id="sl" aria-label="spin left">⟲</button><span id="spinv">spin 0</span><button id="sr" aria-label="spin right">⟳</button><button id="br" aria-label="move right">▶</button></div>
+<div id="help">Swipe up to bowl (curve the swipe for hook) · keys: ←→ move · A/D aim · Q/E spin · hold Space for power</div>
+<div id="ov"><div><h1 id="ovT">Strike Alley</h1>
+  <p id="ovP">Ten frames of bowling with real pin physics.<br>Swipe up on the lane: direction and speed come from your swipe, a curved swipe adds hook.<br>Or use the keyboard: ←→ position, A/D aim, Q/E spin, hold Space and release.</p>
+  <button id="go">Bowl</button></div></div>
+<script type="module">
+import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js";
+
+// Real-ish dimensions in metres. Foul line at z=0, lane runs to -z.
+const LW = 1.05, HEAD = -18.29, DECK_END = -19.45, GUT = .24, BR = .108, PIN_H = .38, PIN_R = .06;
+const PINS = [];
+for (let row = 0; row < 4; row++) for (let k = 0; k <= row; k++) PINS.push([(k - row / 2) * .3048, HEAD - row * .264]);
+
+// ---------- rendering
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x120d1c);
+scene.fog = new THREE.Fog(0x120d1c, 22, 40);
+const camera = new THREE.PerspectiveCamera(50, 1, .05, 80);
+const resize = () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 70 : 50; camera.updateProjectionMatrix(); };
+resize(); addEventListener("resize", resize);
+scene.add(new THREE.HemisphereLight(0xffeedd, 0x2a1d3a, .55));
+for (const z of [-4, -10, -16]) { const l = new THREE.PointLight(0xffe2c0, .35, 14); l.position.set(0, 3, z); scene.add(l); }
+const spot = new THREE.SpotLight(0xffffff, 1.4, 12, .5, .5);
+spot.position.set(0, 4, HEAD + 2.5); spot.target.position.set(0, 0, HEAD - .4); spot.castShadow = true; spot.shadow.mapSize.set(1024, 1024);
+scene.add(spot, spot.target);
+
+const canvasTex = (w, h, draw) => { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t; };
+const laneTex = canvasTex(256, 2048, (x, w, h) => {
+  for (let i = 0; i < 39; i++) { x.fillStyle = `hsl(${30 + (i * 7) % 6} ${45 + (i * 13) % 12}% ${62 + (i * 17) % 9}%)`; x.fillRect(i * w / 39, 0, w / 39 + 1, h); }
+  x.fillStyle = "#0002"; for (let i = 0; i < 39; i++) x.fillRect(i * w / 39, 0, 1, h);
+  x.fillStyle = "#7a2a3a"; // aiming arrows ~4.6 m past the foul line, dots ~2 m
+  for (const k of [5, 10, 15, 20, 25, 30, 35]) {
+    const ax = k * w / 39 + w / 78, ay = h * (1 - (4.6 - Math.abs(k - 20) * .12) / 19.5);
+    x.beginPath(); x.moveTo(ax, ay - 30); x.lineTo(ax - 4, ay); x.lineTo(ax + 4, ay); x.fill();
+    x.beginPath(); x.arc(ax, h * (1 - 2.1 / 19.5), 3, 0, 7); x.fill();
+  }
+  x.fillRect(0, h - 4, w, 4);
+});
+const M = {
+  lane: new THREE.MeshStandardMaterial({ map: laneTex, roughness: .38, metalness: .05 }),
+  gutter: new THREE.MeshStandardMaterial({ color: 0x2c2c36, roughness: .4, metalness: .5 }),
+  wall: new THREE.MeshStandardMaterial({ color: 0x3b2a55, roughness: .8 }),
+  pit: new THREE.MeshStandardMaterial({ color: 0x08060c, roughness: 1 }),
+  approach: new THREE.MeshStandardMaterial({ color: 0xcfa77a, roughness: .5 }),
+};
+const box = (w, h, d, mat, x, y, z, shadow = true) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.receiveShadow = shadow; scene.add(m); return m; };
+
+// ---------- physics world
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+world.broadphase = new CANNON.SAPBroadphase(world); world.allowSleep = true;
+world.solver.iterations = 12;
+const mLane = new CANNON.Material("lane"), mBall = new CANNON.Material("ball"), mPin = new CANNON.Material("pin");
+world.addContactMaterial(new CANNON.ContactMaterial(mBall, mLane, { friction: .02, restitution: .05 }));
+world.addContactMaterial(new CANNON.ContactMaterial(mPin, mLane, { friction: .25, restitution: .2 }));
+world.addContactMaterial(new CANNON.ContactMaterial(mBall, mPin, { friction: .1, restitution: .55 }));
+world.addContactMaterial(new CANNON.ContactMaterial(mPin, mPin, { friction: .2, restitution: .6 }));
+const solid = (w, h, d, x, y, z, mat = mLane) => { const b = new CANNON.Body({ mass: 0, material: mat, shape: new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)) }); b.position.set(x, y, z); world.addBody(b); };
+
+// lane slab (top y=0) from the foul line to the end of the pin deck
+const laneLen = -DECK_END;
+box(LW, .1, laneLen, M.lane, 0, -.05, DECK_END / 2); solid(LW, .1, laneLen, 0, -.05, DECK_END / 2);
+box(3.2, .1, 4, M.approach, 0, -.05, 2);
+// gutters: troughs beside the lane, top at -0.07
+for (const s of [-1, 1]) {
+  const gx = s * (LW / 2 + GUT / 2);
+  box(GUT, .1, laneLen, M.gutter, gx, -.12, DECK_END / 2); solid(GUT, .1, laneLen, gx, -.12, DECK_END / 2);
+  const wx = s * (LW / 2 + GUT + .05);
+  box(.1, .7, 6, M.wall, wx, .2, HEAD - .4); solid(.1, 1.4, 6, wx, .2, HEAD - .4); // kickbacks send pins back in
+  box(.1, .12, laneLen - 6, M.wall, wx, -.04, (DECK_END + 6) / 2 - 3);
+  box(1.2, .2, 24, M.pit, s * 1.4, -.12, -8);
+}
+// pit + back cushion
+box(LW + 2 * GUT + .2, .1, 1.4, M.pit, 0, -.45, DECK_END - .7); solid(LW + 2 * GUT + .2, .1, 1.4, 0, -.45, DECK_END - .7);
+box(LW + 2 * GUT + .2, 1.2, .2, M.pit, 0, .15, DECK_END - 1.4); solid(LW + 2 * GUT + .2, 1.6, .2, 0, .15, DECK_END - 1.4);
+const hood = box(LW + 2 * GUT + .3, .5, .3, M.wall, 0, .95, HEAD + .6); // masking unit over the pins
+const sign = canvasTex(512, 128, (x, w, h) => { x.fillStyle = "#3b2a55"; x.fillRect(0, 0, w, h); x.font = "900 70px system-ui"; x.textAlign = "center"; x.fillStyle = "#ff4d6d"; x.fillText("STRIKE ALLEY", w / 2, 90); });
+const signM = new THREE.Mesh(new THREE.PlaneGeometry(LW + 2 * GUT + .3, .45), new THREE.MeshBasicMaterial({ map: sign }));
+signM.position.set(0, .95, HEAD + .76); scene.add(signM);
+
+// ---------- pins: lathe profile + red neck stripes
+const pinProfile = [[0, 0], [.026, 0], [.04, .03], [.057, .1], [.06, .14], [.052, .2], [.032, .25], [.023, .27], [.025, .3], [.032, .33], [.03, .36], [.018, .378], [0, .38]].map(([r, y]) => new THREE.Vector2(r, y));
+const pinTex = canvasTex(64, 256, (x, w, h) => { x.fillStyle = "#f6f3ee"; x.fillRect(0, 0, w, h); x.fillStyle = "#d62839"; x.fillRect(0, h * (1 - .262), w, h * .016); x.fillRect(0, h * (1 - .29), w, h * .016); });
+pinTex.wrapS = THREE.RepeatWrapping;
+const pinGeo = new THREE.LatheGeometry(pinProfile, 20);
+{ const uv = pinGeo.attributes.uv, p = pinGeo.attributes.position; for (let i = 0; i < uv.count; i++) uv.setY(i, p.getY(i) / PIN_H); } // v = height
+const pinMat = new THREE.MeshStandardMaterial({ map: pinTex, roughness: .25 });
+const pins = PINS.map(() => {
+  const mesh = new THREE.Group(), inner = new THREE.Mesh(pinGeo, pinMat);
+  inner.position.y = -PIN_H / 2; inner.castShadow = true; mesh.add(inner); scene.add(mesh);
+  const body = new CANNON.Body({ mass: 1.55, material: mPin, sleepSpeedLimit: .05 });
+  body.addShape(new CANNON.Cylinder(.055, .045, .2, 10), new CANNON.Vec3(0, -.09, 0)); // wide belly low = low centre of mass
+  body.addShape(new CANNON.Cylinder(.026, .045, .18, 8), new CANNON.Vec3(0, .1, 0));
+  body.angularDamping = .3; body.linearDamping = .05;
+  world.addBody(body);
+  return { mesh, body, up: true };
+});
+
+// ---------- ball
+const ballTex = canvasTex(256, 128, (x, w, h) => {
+  const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, "#5b2a86"); g.addColorStop(.5, "#ff4d6d"); g.addColorStop(1, "#3a0ca3");
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 40; i++) { x.strokeStyle = `rgba(255,255,255,${Math.random() * .25})`; x.lineWidth = 1 + Math.random() * 3; x.beginPath(); x.moveTo(Math.random() * w, Math.random() * h); x.bezierCurveTo(Math.random() * w, Math.random() * h, Math.random() * w, Math.random() * h, Math.random() * w, Math.random() * h); x.stroke(); }
+});
+const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BR, 32, 20), new THREE.MeshStandardMaterial({ map: ballTex, roughness: .12, metalness: .2 }));
+ballMesh.castShadow = true;
+for (const [a, b] of [[-.3, 1.2], [.3, 1.2], [0, .75]]) { // finger holes
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(.014, 12), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+  const n = new THREE.Vector3(Math.sin(a), Math.cos(b), Math.sin(b) * .3).normalize();
+  hole.position.copy(n.clone().multiplyScalar(BR + .0005)); hole.lookAt(n.clone().multiplyScalar(2)); ballMesh.add(hole);
+}
+scene.add(ballMesh);
+const ball = new CANNON.Body({ mass: 6.8, material: mBall, shape: new CANNON.Sphere(BR), linearDamping: .01, angularDamping: .01 });
+ball.ccdSpeedThreshold = 1;
+const aimLine = new THREE.Mesh(new THREE.PlaneGeometry(.02, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35 }));
+aimLine.rotation.x = -Math.PI / 2; scene.add(aimLine);
+
+// ---------- game state
+let frame = 0, frames = Array.from({ length: 10 }, () => []), standing = 10, phase = "menu", ballX = 0, aim = 0, spin = 0, power = 0, charging = false, rollT = 0, settleT = 0, inGutter = false;
+let best = 0; try { best = +localStorage.getItem("strike-best") || 0; } catch {}
+
+function rackPins(all) {
+  pins.forEach((p, i) => {
+    if (!all && !p.up) { p.body.position.set(50 + i, -5, 0); p.body.type = CANNON.Body.STATIC; p.body.updateMassProperties(); p.mesh.visible = false; return; }
+    if (!all) { // keep standing pins where they stand, upright
+      p.body.quaternion.set(0, 0, 0, 1); p.body.position.y = PIN_H / 2; p.body.velocity.setZero(); p.body.angularVelocity.setZero(); return;
+    }
+    p.up = true; p.mesh.visible = true; p.body.type = CANNON.Body.DYNAMIC; p.body.mass = 1.55; p.body.updateMassProperties();
+    p.body.position.set(PINS[i][0], PIN_H / 2 + .001, PINS[i][1]); p.body.quaternion.set(0, 0, 0, 1);
+    p.body.velocity.setZero(); p.body.angularVelocity.setZero(); p.body.wakeUp();
+  });
+}
+function resetBall() {
+  if (ball.world) world.removeBody(ball);
+  ball.position.set(ballX, BR, -.3); ball.velocity.setZero(); ball.angularVelocity.setZero(); ball.quaternion.set(0, 0, 0, 1);
+  ballMesh.position.set(ballX, BR, -.3); inGutter = false;
+}
+function throwBall(speed, angle, s) {
+  if (phase !== "aim") return;
+  speed = Math.max(4, Math.min(10.5, speed)); spin = Math.max(-3, Math.min(3, s));
+  resetBall(); world.addBody(ball); ball.wakeUp();
+  ball.velocity.set(Math.sin(angle) * speed, 0, -Math.cos(angle) * speed);
+  ball.angularVelocity.set(-speed / BR * .6, 0, 0); // mostly skidding at release, like a real throw
+  phase = "roll"; rollT = 0; settleT = 0; aimLine.visible = false;
+  power = 0; powerEl.style.opacity = 0; ui();
+}
+
+const pinUp = p => {
+  const q = p.body.quaternion, upY = 1 - 2 * (q.x * q.x + q.z * q.z); // world-y of pin's local up axis
+  return upY > .8 && p.body.position.y > PIN_H / 2 - .03 && p.body.position.z > DECK_END && Math.abs(p.body.position.x) < LW / 2 + .02;
+};
+const countUp = () => pins.filter(p => p.mesh.visible && pinUp(p)).length;
+
+function after() { // a roll has settled: score it and set up the next one
+  const nowUp = countUp(), down = standing - nowUp;
+  pins.forEach(p => p.up = p.mesh.visible && pinUp(p));
+  const f = frames[frame]; f.push(down);
+  const tenth = frame === 9, first = f.length === 1;
+  let text = down === 0 ? (inGutter ? "Gutter" : "Miss") : String(down);
+  if (first && down === 10) text = "STRIKE!";
+  else if (!first && f[f.length - 2] + down === 10 && (!tenth || f[f.length - 2] !== 10)) text = "Spare!";
+  if (tenth && f.length === 3 && down === 10 && f[1] === 10) text = "STRIKE!";
+  show(text);
+  let next = false, rerack = false;
+  if (!tenth) { if (down === 10 && first || !first) next = rerack = true; }
+  else {
+    const sum = f[0] + (f[1] ?? 0);
+    if (f.length === 3 || (f.length === 2 && sum < 10)) { return setTimeout(endGame, 1400); }
+    rerack = nowUp === 0;
+  }
+  standing = rerack ? 10 : nowUp;
+  setTimeout(() => {
+    if (next) frame++;
+    rackPins(rerack); phase = "aim"; aimLine.visible = true; resetBall(); ui();
+  }, 1300);
+}
+function score() { // cumulative score per frame (null if not yet known)
+  const out = []; let total = 0;
+  const flat = frames.flat();
+  let i = 0;
+  for (let f = 0; f < 10; f++) {
+    const fr = frames[f]; if (!fr.length) break;
+    if (f === 9) { if (fr.length === 3 || (fr.length === 2 && fr[0] + fr[1] < 10)) { total += fr.reduce((a, b) => a + b, 0); out.push(total); } break; }
+    if (fr[0] === 10) { if (flat[i + 2] === undefined) break; total += 10 + flat[i + 1] + flat[i + 2]; i += 1; }
+    else { if (fr.length < 2) break; if (fr[0] + fr[1] === 10) { if (flat[i + 2] === undefined) break; total += 10 + flat[i + 2]; } else total += fr[0] + fr[1]; i += 2; }
+    out.push(total);
+  }
+  return out;
+}
+const marks = (fr, tenth) => fr.map((v, k) => {
+  const prev = fr[k - 1];
+  if (v === 10 && (k === 0 || tenth && (prev === 10 || (k === 2 && fr[0] + fr[1] === 10)))) return "X";
+  if (k > 0 && prev !== 10 && prev + v === 10 && !(tenth && k === 2 && fr[0] + fr[1] === 10 && fr[0] !== 10)) return "/";
+  if (tenth && k === 2 && fr[0] === 10 && fr[1] !== 10 && fr[1] + v === 10) return "/";
+  return v === 0 ? "-" : v;
+}).join(" ");
+function ui() {
+  const s = score();
+  card.innerHTML = frames.map((fr, f) => `<div class="${f === frame && phase !== "over" ? "cur" : ""}"><b>${f + 1}</b><i>${marks(fr, f === 9) || "&nbsp;"}</i><span>${s[f] ?? "&nbsp;"}</span></div>`).join("") + `<div><b>BEST</b><i>&nbsp;</i><span>${best || "–"}</span></div>`;
+  spinv.textContent = `spin ${spin > 0 ? "+" : ""}${spin.toFixed(1)}`;
+}
+const msgEl = document.getElementById("msg"), powerEl = document.getElementById("power");
+function show(t) { msgEl.textContent = t; msgEl.style.opacity = 1; clearTimeout(show.t); show.t = setTimeout(() => msgEl.style.opacity = 0, 1100); }
+function endGame() {
+  phase = "over"; ui();
+  const total = score().at(-1);
+  const nb = total > best; if (nb) { best = total; try { localStorage.setItem("strike-best", best); } catch {} }
+  ovT.textContent = nb ? "New high score!" : "Game over"; ovP.innerHTML = `Final score <b>${total}</b><br>Best ${best}`; go.textContent = "Bowl again"; ov.hidden = false; ui();
+}
+function newGame() {
+  frame = 0; frames = Array.from({ length: 10 }, () => []); standing = 10; ballX = 0; aim = 0; spin = 0;
+  rackPins(true); resetBall(); phase = "aim"; aimLine.visible = true; ov.hidden = true; ui();
+}
+
+// ---------- loop
+const camPos = new THREE.Vector3(0, 1.1, 2.4), camLook = new THREE.Vector3(0, .1, HEAD);
+let last = 0, acc = 0;
+function step(dt) {
+  if (phase === "roll") {
+    rollT += dt;
+    const onLane = ball.position.y > BR - .02 && Math.abs(ball.position.x) < LW / 2;
+    if (!onLane && ball.position.y < BR - .03) inGutter = true;
+    if (onLane && !inGutter && ball.position.z < -5 && ball.position.z > HEAD + .3) ball.applyForce(new CANNON.Vec3(spin * 3.4, 0, 0), ball.position); // hook on the dry back end
+    if (inGutter) { ball.velocity.x *= .9; }
+    const still = pins.every(p => !p.mesh.visible || p.body.sleepState === CANNON.Body.SLEEPING || p.body.velocity.length() < .05);
+    if (ball.position.z < HEAD - .5 || ball.position.y < -1 || rollT > 6) settleT += dt;
+    if ((settleT > 1.6 && still) || settleT > 4 || rollT > 10) { phase = "settle"; after(); }
+  }
+  if (charging) { power = Math.min(1, power + dt * .9); powerEl.firstChild.style.height = power * 100 + "%"; }
+}
+(function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000 || 0); last = now;
+  if (phase !== "menu") { step(dt); world.step(1 / 120, dt, 8); }
+  for (const p of pins) { p.mesh.position.copy(p.body.position); p.mesh.quaternion.copy(p.body.quaternion); }
+  if (phase === "roll" || phase === "settle") { ballMesh.position.copy(ball.position); ballMesh.quaternion.copy(ball.quaternion); }
+  else { ballMesh.position.set(ballX, BR, -.3); aimLine.position.set(ballX + Math.sin(aim) * 3, .003, -.3 - Math.cos(aim) * 3); aimLine.rotation.z = -aim; }
+  // camera: behind the ball, then parks near the pins
+  const bz = Math.max(HEAD + 3.2, ballMesh.position.z);
+  const target = phase === "roll" || phase === "settle" ? new THREE.Vector3(ballMesh.position.x * .5, .75, bz + 2.2) : phase === "menu" ? new THREE.Vector3(1.4, 1.2, HEAD + 4) : new THREE.Vector3(ballX * .6, 1.1, 2.4);
+  camPos.lerp(target, Math.min(1, dt * 3));
+  camLook.lerp(new THREE.Vector3(phase === "roll" ? ballMesh.position.x * .3 : 0, .05, HEAD - .3), Math.min(1, dt * 3));
+  camera.position.copy(camPos); camera.lookAt(camLook);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+})(0);
+
+// ---------- input
+const clampX = x => Math.max(-LW / 2 + BR, Math.min(LW / 2 - BR, x));
+const moveBall = d => { if (phase === "aim") ballX = clampX(ballX + d * .06); };
+const setSpin = d => { if (phase === "aim") { spin = Math.max(-3, Math.min(3, spin + d * .5)); ui(); } };
+addEventListener("keydown", e => {
+  if (e.repeat && e.code === "Space") return;
+  ({ ArrowLeft: () => moveBall(-1), ArrowRight: () => moveBall(1), KeyA: () => aim = Math.max(-.06, aim - .005), KeyD: () => aim = Math.min(.06, aim + .005), KeyQ: () => setSpin(-1), KeyE: () => setSpin(1),
+     Space: () => { e.preventDefault(); if (!ov.hidden) return newGame(); if (phase === "aim") { charging = true; power = 0; powerEl.style.opacity = 1; } } }[e.code] || (() => {}))();
+});
+addEventListener("keyup", e => { if (e.code === "Space" && charging) { charging = false; throwBall(4 + power * 6.5, aim, spin); } });
+bl.onclick = () => moveBall(-1); br.onclick = () => moveBall(1); sl.onclick = () => setSpin(-1); sr.onclick = () => setSpin(1);
+let swipe = null;
+renderer.domElement.addEventListener("pointerdown", e => { if (phase === "aim") swipe = [[e.clientX, e.clientY, performance.now()]]; });
+addEventListener("pointermove", e => { if (swipe) swipe.push([e.clientX, e.clientY, performance.now()]); });
+addEventListener("pointerup", () => {
+  if (!swipe) return; const s = swipe; swipe = null;
+  const [x0, y0, t0] = s[0], [x1, y1, t1] = s.at(-1), dy = y0 - y1;
+  if (dy < 50) return; // not an upward swipe
+  const px = Math.min(innerWidth, innerHeight) / 1000; // screen-size-independent units
+  const v = dy / px / Math.max(60, t1 - t0) * 1000; // "units" per second
+  const ang = Math.max(-.07, Math.min(.07, (x1 - x0) / dy * .12));
+  const mid = s[s.length >> 1], dev = (mid[0] - (x0 + x1) / 2) / px; // curvature: bow of the swipe path
+  throwBall(3 + v / 420, ang, -dev / 40 + spin);
+});
+go.onclick = newGame;
+rackPins(true); resetBall(); ui();
+window.__game = { throwBall: (...a) => throwBall(...a), state: () => ({ phase, frame, frames: frames && frames.map(f => [...f]), score: frames && score(), up: countUp() }), newGame };
+</script>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ring Flyer</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow: hidden; background: #a7d8f0; color: #fff; font: 700 16px system-ui, sans-serif; user-select: none; touch-action: none; }
+  canvas { display: block; }
+  .hud { position: fixed; text-shadow: 0 2px 6px #0009; pointer-events: none; }
+  #tl { top: 12px; left: 16px; font-size: 22px; line-height: 1.3; }
+  #time { top: 10px; left: 0; right: 0; text-align: center; font: 900 40px system-ui; }
+  #time.low { color: #ff5d5d; }
+  #tr { top: 12px; right: 16px; text-align: right; line-height: 1.4; }
+  #bar { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); width: min(60vw, 260px); height: 10px; border-radius: 5px; background: #0005; overflow: hidden; pointer-events: none; }
+  #bar div { height: 100%; background: linear-gradient(90deg, #4cc9f0, #b8f2ff); }
+  #popup { top: 30%; left: 0; right: 0; text-align: center; font: 900 30px system-ui; color: #ffd166; opacity: 0; transition: opacity .25s; }
+  #ov { position: fixed; inset: 0; display: grid; place-items: center; background: #0005; backdrop-filter: blur(3px); }
+  #ov[hidden] { display: none; }
+  #ov > div { background: #183247ee; padding: 26px 32px; border-radius: 18px; text-align: center; max-width: 440px; margin: 16px; }
+  #ov h1 { margin: 0 0 8px; font-size: 34px; }
+  #ov p { color: #c8dcea; line-height: 1.55; margin: 0 0 16px; font-weight: 500; }
+  #ov button { font: 800 17px system-ui; border: 0; border-radius: 12px; padding: 12px 26px; cursor: pointer; background: #ffd166; color: #3a2a00; }
+</style>
+</head>
+<body>
+<!-- three.js r128; terrain = hand-rolled value-noise fbm on one mesh that re-centres under the plane (endless world, no chunk system) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<div class="hud" id="tl"></div>
+<div class="hud" id="time"></div>
+<div class="hud" id="tr"></div>
+<div class="hud" id="popup"></div>
+<div id="bar"><div></div></div>
+<div id="ov"><div><h1 id="ovT">Ring Flyer</h1>
+  <p id="ovP">Fly your glider through the gold rings. Each ring adds time.<br>↑↓ / WS pitch · ←→ / AD bank · Shift or Space boost<br>Mouse / touch: drag to steer.<br>Don't hit the ground or the sea.</p>
+  <button id="go">Take off</button></div></div>
+<script>
+// ---------- noise terrain
+const hash = (i, j) => { const s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return s - Math.floor(s); };
+function noise(x, z) {
+  const i = Math.floor(x), j = Math.floor(z), fx = x - i, fz = z - j, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function heightAt(x, z) {
+  let h = 0, amp = 1, f = .0022;
+  for (let o = 0; o < 5; o++) { h += noise(x * f + 31.7, z * f - 12.3) * amp; amp *= .5; f *= 2.1; }
+  const ridge = 1 - Math.abs(noise(x * .0011 + 5, z * .0011 + 9) * 2 - 1);
+  return (h - .9) * 140 + ridge * ridge * 150 - 35;
+}
+
+// ---------- renderer & scene
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+document.body.prepend(renderer.domElement);
+const SKY = 0xa7d8f0;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(SKY);
+scene.fog = new THREE.Fog(SKY, 300, 950);
+const camera = new THREE.PerspectiveCamera(68, 1, .5, 1500);
+const resize = () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
+resize(); addEventListener("resize", resize);
+scene.add(new THREE.HemisphereLight(0xeaf6ff, 0x55684a, .8));
+const sun = new THREE.DirectionalLight(0xfff1d6, .85); sun.position.set(.5, 1, .3); scene.add(sun);
+
+const SIZE = 1800, SEGS = 150;
+const tGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEGS, SEGS); tGeo.rotateX(-Math.PI / 2);
+tGeo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(tGeo.attributes.position.count * 3), 3));
+const terrain = new THREE.Mesh(tGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+scene.add(terrain);
+const col = new THREE.Color(), C = { sand: new THREE.Color(0xe3cf95), grass: new THREE.Color(0x5f9e4c), dark: new THREE.Color(0x3f7a3c), rock: new THREE.Color(0x857a6d), snow: new THREE.Color(0xf6f8fb) };
+function buildTerrain(cx, cz) {
+  terrain.position.set(cx, 0, cz);
+  const p = tGeo.attributes.position, c = tGeo.attributes.color;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i) + cx, z = p.getZ(i) + cz, h = heightAt(x, z);
+    p.setY(i, h);
+    if (h < 3) col.copy(C.sand);
+    else if (h < 70) col.copy(C.grass).lerp(C.dark, noise(x * .02, z * .02));
+    else if (h < 130) col.copy(C.dark).lerp(C.rock, (h - 70) / 60);
+    else col.copy(C.rock).lerp(C.snow, Math.min(1, (h - 130) / 15));
+    col.convertSRGBToLinear(); c.setXYZ(i, col.r, col.g, col.b); // renderer outputs sRGB
+  }
+  p.needsUpdate = c.needsUpdate = true; tGeo.computeVertexNormals(); tGeo.computeBoundingSphere();
+}
+const water = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshPhongMaterial({ color: 0x2f7fb8, transparent: true, opacity: .85, shininess: 80, specular: 0x88bbdd }));
+water.rotation.x = -Math.PI / 2; scene.add(water);
+
+// clouds: instanced puffs recycled around the plane
+const CLOUDS = 70, cloud = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x777777, transparent: true, opacity: .9 }), CLOUDS * 4);
+const clouds = Array.from({ length: CLOUDS }, () => ({ x: (Math.random() - .5) * 1600, y: 170 + Math.random() * 90, z: (Math.random() - .5) * 1600, s: 14 + Math.random() * 18 }));
+scene.add(cloud);
+const co = new THREE.Object3D();
+function placeClouds(px, pz) {
+  clouds.forEach((c, i) => {
+    if (c.x - px > 800) c.x -= 1600; if (c.x - px < -800) c.x += 1600; if (c.z - pz > 800) c.z -= 1600; if (c.z - pz < -800) c.z += 1600;
+    for (let k = 0; k < 4; k++) { co.position.set(c.x + (k - 1.5) * c.s * .9, c.y + (k % 2) * c.s * .3, c.z + ((i + k) % 3 - 1) * c.s * .4); co.scale.set(c.s, c.s * .55, c.s * .8); co.updateMatrix(); cloud.setMatrixAt(i * 4 + k, co.matrix); }
+  });
+  cloud.instanceMatrix.needsUpdate = true;
+}
+
+// ---------- glider (original: high wing, twin tail booms, orange nose)
+const plane = new THREE.Group(), craft = new THREE.Group(); plane.add(craft);
+{
+  const white = new THREE.MeshStandardMaterial({ color: 0xf4f6fa, roughness: .4 }), accent = new THREE.MeshStandardMaterial({ color: 0xff7b39, roughness: .4 }), glass = new THREE.MeshStandardMaterial({ color: 0x1b3a5a, roughness: .1, metalness: .5 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.55, .35, 5, 12), white); body.rotation.x = Math.PI / 2;
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(.55, 1.4, 12), accent); nose.rotation.x = Math.PI / 2; nose.position.z = 3.2;
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), glass); canopy.scale.set(1, .8, 2); canopy.position.set(0, .35, 1.2);
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(11, .12, 1.4), white); wing.position.set(0, .55, .6);
+  for (const s of [-1, 1]) {
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(.9, .13, 1.2), accent); tip.position.set(s * 5.9, .55, .55); craft.add(tip);
+    const boom = new THREE.Mesh(new THREE.BoxGeometry(.18, .18, 4), white); boom.position.set(s * 1.4, .4, -2); craft.add(boom);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(.1, 1.1, .8), accent); fin.position.set(s * 1.4, .9, -3.7); craft.add(fin);
+  }
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(3.4, .1, .8), white); tail.position.set(0, .45, -3.8);
+  const prop = new THREE.Mesh(new THREE.BoxGeometry(2.2, .12, .05), new THREE.MeshStandardMaterial({ color: 0x333333 })); prop.position.z = 3.95; craft.prop = prop;
+  craft.add(body, nose, canopy, wing, tail, prop);
+}
+scene.add(plane);
+const arrow = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.8, 10), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+arrow.geometry.rotateX(Math.PI / 2); scene.add(arrow);
+
+// ---------- rings
+const ringGeo = new THREE.TorusGeometry(10, 1, 10, 40), RING_R = 10;
+const ringMat = { next: new THREE.MeshStandardMaterial({ color: 0xffc83d, emissive: 0x7a5200, metalness: .5, roughness: .3 }), later: new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: .45 }), miss: new THREE.MeshBasicMaterial({ color: 0xff5d5d, transparent: true, opacity: .5 }) };
+let rings = [];
+function addRing(from, yaw) {
+  const dist = 190 + Math.random() * 60;
+  const x = from.x + Math.sin(yaw) * dist, z = from.z + Math.cos(yaw) * dist;
+  let ground = 0; for (const [dx, dz] of [[0, 0], [12, 0], [-12, 0], [0, 12], [0, -12]]) ground = Math.max(ground, heightAt(x + dx, z + dz));
+  const y = Math.max(ground + 22, Math.min(ground + 70, from.y + (Math.random() - .5) * 60));
+  const m = new THREE.Mesh(ringGeo, ringMat.later); m.position.set(x, y, z); m.rotation.y = yaw;
+  scene.add(m); rings.push({ m, yaw, pos: m.position, normal: new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), side: null });
+}
+function refreshRings() { rings.forEach((r, i) => r.m.material = r.missed ? ringMat.miss : i === 0 ? ringMat.next : ringMat.later); }
+
+// ---------- state
+let state = "menu", pos = new THREE.Vector3(), yaw, pitch, roll, speed, energy, timeLeft, score, combo, t = 0, best = 0, center = [0, 0];
+try { best = +localStorage.getItem("ring-best") || 0; } catch {}
+const keys = {}, drag = { on: false, x: 0, y: 0, dx: 0, dy: 0 };
+function reset() {
+  rings.forEach(r => scene.remove(r.m)); rings = [];
+  pos.set(0, heightAt(0, 0) + 70, 0); yaw = 0; pitch = 0; roll = 0; speed = 48; energy = 1; timeLeft = 25; score = 0; combo = 0;
+  pos.y = Math.max(pos.y, 70);
+  let prev = { x: pos.x, y: pos.y, z: pos.z }, y = 0;
+  for (let i = 0; i < 4; i++) { y += i ? (Math.random() - .5) * 1.2 : 0; addRing(prev, y); prev = rings.at(-1).pos; }
+  refreshRings(); center = [0, 0]; buildTerrain(0, 0); placeClouds(0, 0);
+}
+function pop(text) { popup.textContent = text; popup.style.opacity = 1; clearTimeout(pop.t); pop.t = setTimeout(() => popup.style.opacity = 0, 800); }
+function startGame() { reset(); state = "play"; ov.hidden = true; }
+const debris = [];
+function crash() {
+  state = "over";
+  for (let i = 0; i < 40; i++) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(.6, .6, .6), new THREE.MeshBasicMaterial({ color: i % 3 ? 0xff7b39 : 0x444444 }));
+    m.position.copy(pos); m.v = new THREE.Vector3((Math.random() - .5) * 40, Math.random() * 30, (Math.random() - .5) * 40); scene.add(m); debris.push(m);
+  }
+  plane.visible = false; endGame("Crashed!");
+}
+function endGame(title) {
+  if (state !== "over") state = "over";
+  const nb = score > best; if (nb) { best = score; try { localStorage.setItem("ring-best", best); } catch {} }
+  setTimeout(() => { ovT.textContent = nb ? "New record!" : title; ovP.innerHTML = `${score} rings<br>Best ${best}`; go.textContent = "Fly again"; ov.hidden = false; }, 1200);
+}
+
+function update(dt) {
+  t += dt;
+  craft.prop.rotation.z += dt * 40;
+  for (let i = debris.length - 1; i >= 0; i--) { const d = debris[i]; d.v.y -= 30 * dt; d.position.addScaledVector(d.v, dt); d.rotation.x += dt * 5; if (d.position.y < -20) { scene.remove(d); debris.splice(i, 1); } }
+  if (state !== "play") {
+    if (state === "menu") { yaw += dt * .12; pos.set(Math.sin(t * .12) * 300, 110, Math.cos(t * .12) * 300); roll = -.3; pitch = 0; yaw = t * .12 + Math.PI / 2; }
+    return;
+  }
+  // controls
+  let pi = (keys.ArrowUp || keys.KeyW ? 1 : 0) - (keys.ArrowDown || keys.KeyS ? 1 : 0);
+  let ri = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+  if (drag.on) { pi = Math.max(-1, Math.min(1, -drag.dy / 100)); ri = Math.max(-1, Math.min(1, drag.dx / 100)); }
+  const boosting = (keys.ShiftLeft || keys.ShiftRight || keys.Space || drag.boost) && energy > 0;
+  roll += (ri * 1.1 - roll) * Math.min(1, dt * 3);
+  yaw -= roll * .85 * dt;
+  pitch = Math.max(-1, Math.min(1, pitch + pi * 1.1 * dt));
+  if (!pi) pitch *= 1 - .4 * dt; // gentle auto-level
+  const target = (boosting ? 82 : 50) - pitch * 18; // climbing costs speed, diving adds it
+  speed += (target - speed) * Math.min(1, dt * 1.2);
+  energy = Math.max(0, Math.min(1, energy + (boosting ? -.35 : .04) * dt));
+  const fwd = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+  const prevPos = pos.clone();
+  pos.addScaledVector(fwd, speed * dt);
+  if (pos.y > 320) pos.y = 320;
+  // terrain recentre
+  if (Math.abs(pos.x - center[0]) > 200 || Math.abs(pos.z - center[1]) > 200) { center = [Math.round(pos.x / 100) * 100, Math.round(pos.z / 100) * 100]; buildTerrain(...center); }
+  placeClouds(pos.x, pos.z);
+  if (pos.y < Math.max(.5, heightAt(pos.x, pos.z) + 1.2)) return crash();
+  // rings: pass = cross the ring plane within its radius
+  const r = rings[0], before = prevPos.clone().sub(r.pos).dot(r.normal), after = pos.clone().sub(r.pos).dot(r.normal);
+  if (before < 0 && after >= 0) {
+    const hit = pos.distanceTo(r.pos) < RING_R - .6;
+    if (hit) { score++; combo++; const bonus = Math.max(3.5, 7 - score * .08); timeLeft += bonus; energy = Math.min(1, energy + .25); pop(`+${bonus.toFixed(1)}s${combo > 2 ? `  ×${combo}` : ""}`); }
+    else { combo = 0; r.missed = true; pop("Missed"); }
+    nextRing(hit);
+  } else if (after < -400 && pos.distanceTo(r.pos) > 500) { combo = 0; pop("Ring lost"); nextRing(false); } // flew away from it
+  r.m.rotation.z += dt * .5;
+  timeLeft -= dt;
+  if (timeLeft <= 0) { timeLeft = 0; endGame("Time's up!"); }
+  tl.innerHTML = `◯ ${score}<br><small>Best ${best}</small>`;
+  time.textContent = timeLeft.toFixed(1); time.className = "hud" + (timeLeft < 5 ? " low" : "");
+  tr.innerHTML = `${Math.round(speed * 3.6)} km/h<br>alt ${Math.round(pos.y)} m`;
+  bar.firstChild.style.width = energy * 100 + "%";
+}
+function nextRing(hit) {
+  const r = rings.shift();
+  if (hit) scene.remove(r.m); else setTimeout(() => scene.remove(r.m), 1500);
+  const lastR = rings.at(-1);
+  addRing(lastR.pos, lastR.yaw + (Math.random() - .5) * 1.3);
+  refreshRings();
+}
+
+// ---------- loop
+const camPos = new THREE.Vector3(0, 100, -30);
+let last = 0;
+(function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000 || 0); last = now;
+  update(dt);
+  if (state !== "over" || plane.visible) {
+    plane.position.copy(pos);
+    plane.rotation.set(0, 0, 0, "YXZ"); plane.rotation.y = yaw; plane.rotation.x = -pitch; plane.rotation.z = roll;
+  }
+  const back = new THREE.Vector3(-Math.sin(yaw) * 16, 5 + pitch * -6, -Math.cos(yaw) * 16);
+  camPos.lerp(pos.clone().add(back), Math.min(1, dt * (state === "menu" ? 2 : 4)));
+  camera.position.copy(camPos);
+  camera.lookAt(pos.x + Math.sin(yaw) * 12, pos.y + 2, pos.z + Math.cos(yaw) * 12);
+  camera.fov = 68 + (speed - 50) * .25; camera.updateProjectionMatrix();
+  water.position.set(pos.x, 0, pos.z);
+  if (rings[0] && state === "play") {
+    arrow.visible = true;
+    arrow.position.copy(pos).add(new THREE.Vector3(Math.sin(yaw) * 9, 3.5, Math.cos(yaw) * 9));
+    arrow.lookAt(rings[0].pos);
+  } else arrow.visible = false;
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+})(0);
+
+addEventListener("keydown", e => { keys[e.code] = true; if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault(); if (e.code === "Enter" && !ov.hidden) startGame(); });
+addEventListener("keyup", e => keys[e.code] = false);
+renderer.domElement.addEventListener("pointerdown", e => { Object.assign(drag, { on: true, x: e.clientX, y: e.clientY, dx: 0, dy: 0, boost: e.pointerType === "touch" && e.isPrimary === false }); });
+addEventListener("pointermove", e => { if (drag.on && e.isPrimary) { drag.dx = e.clientX - drag.x; drag.dy = e.clientY - drag.y; } });
+addEventListener("pointerup", e => { if (e.isPrimary) drag.on = false; });
+// second finger = boost on touch
+addEventListener("touchstart", e => { if (e.touches.length > 1) drag.boost = true; });
+addEventListener("touchend", e => { if (e.touches.length < 2) drag.boost = false; });
+go.onclick = startGame;
+reset();
+window.__game = { keys, get state() { return state; }, get pos() { return pos; }, get rings() { return rings; }, get score() { return score; }, startGame, setYawPitch: (y, p) => { yaw = y; pitch = p; } };
+</script>
+</body>
+</html>

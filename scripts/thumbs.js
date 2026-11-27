@@ -119,6 +119,11 @@ const setup = {
   "rock-blaster": async p => { await p.keyboard.press("Enter"); await p.keyboard.down("Space"); await p.keyboard.down("ArrowLeft"); await p.waitForTimeout(1500); },
   "mole-bop": async p => { await p.click("#go"); await p.evaluate(() => { score = 12; hud2(); [0, 4, 7].forEach(i => holes[i].classList.add("up")); holes[4].firstChild.textContent = "•ᴥ•"; holes[0].firstChild.textContent = "•ᴥ•"; holes[7].firstChild.className = "m bomb"; holes[7].firstChild.textContent = "💣"; running = false; }); await p.waitForTimeout(300); },
   "echo-pads": async p => { await p.evaluate(() => els[1].classList.add("on")); },
+  "sky-hopper": async p => { await p.evaluate(() => { start(); setTimeout(jump, 1200); }); await p.waitForTimeout(1700); },
+  "marble-tilt": async p => { await p.evaluate(() => { startGame(); build(level = 3); keys.ArrowDown = 1; }); await p.waitForTimeout(900); },
+  "strike-alley": async p => { await p.waitForTimeout(2000); await p.evaluate(() => { __game.newGame(); __game.throwBall(8.5, 0, 0); }); await p.waitForTimeout(2300); },
+  "drift-circuit": async p => { await p.evaluate(() => { __game.startRace(); big.style.display = "none"; }); await p.waitForTimeout(1200); },
+  "ring-flyer": async p => { await p.evaluate(() => { __game.startGame(); __game.keys.ArrowLeft = true; }); await p.waitForTimeout(1500); },
 };
 
 (async () => {
