@@ -12,10 +12,12 @@
     <a class="btn ghost home" href="./">← Home</a>
     <strong id="title"></strong>
     <div>
+      <button class="btn ghost" id="restart" title="Restart game">↻</button>
       <button class="btn ghost" id="full">Fullscreen</button>
       <button class="btn" id="next">Next game</button>
     </div>
   </nav>
+  <p class="desc" id="desc"></p>
   <div class="frame-wrap"><iframe id="frame" allow="fullscreen; autoplay; gamepad" allowfullscreen></iframe></div>
   <!-- GitHub Pages caches 10 min; timestamp forces fresh game list -->
   <script>document.write(`<script src="games.js?${Date.now()}"><\/script>`)</script>
@@ -26,10 +28,16 @@
     else {
       document.title = g.title + " · Random Games";
       document.getElementById("title").textContent = g.title;
+      desc.textContent = g.desc || "";
+      try { // remember for "Continue playing" on the home page
+        const r = JSON.parse(localStorage.getItem("recent") || "[]").filter(x => x !== g.id);
+        localStorage.setItem("recent", JSON.stringify([g.id, ...r].slice(0, 12)));
+      } catch {}
       frame.src = g.src || `games/${g.id}/index.html?v=${Date.now()}`; // bypass 10-min Pages cache so game updates show at once
       frame.onload = () => frame.focus();
     }
     full.onclick = () => frame.requestFullscreen();
+    restart.onclick = () => { frame.src = frame.src; };
     next.onclick = () => {
       const others = GAMES.filter(x => x.id !== id);
       const r = others[Math.floor(Math.random() * others.length)] || g;

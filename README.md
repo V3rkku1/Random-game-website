@@ -15,6 +15,21 @@ Optional: `thumb: "games/my-game/thumb.png"` for an image card, `src: "https://.
 
 The game shows up on the home page with search, tag filter, random button and a player page with fullscreen.
 
+Optional `best: ["my-game-best", " pts"]` shows the player's record (read from that localStorage key) on the card. Keep new games at the end of the list: the last 8 get a "New" badge and "Newest" sort uses list order.
+
+## Shared game kit
+
+`games/kit.js` gives any game synth sound effects, M to mute and P/Esc to pause (auto-pauses when the tab or iframe loses focus):
+
+```html
+<script src="../kit.js"></script>
+<script>
+  kit.sfx("jump");                         // jump coin shoot hit boom pop bounce click knock win lose
+  kit.pausable(() => state === "play");    // when pausing is allowed
+  if (!kit.paused) update(dt);             // in the game loop
+</script>
+```
+
 ## Thumbnails
 
 Cards show `thumbs/<id>.jpg` screenshots. Regenerate with Playwright:

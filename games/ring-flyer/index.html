@@ -26,6 +26,7 @@
 <body>
 <!-- three.js r128; terrain = hand-rolled value-noise fbm on one mesh that re-centres under the plane (endless world, no chunk system) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../kit.js"></script>
 <div class="hud" id="tl"></div>
 <div class="hud" id="time"></div>
 <div class="hud" id="tr"></div>
@@ -151,7 +152,7 @@ function pop(text) { popup.textContent = text; popup.style.opacity = 1; clearTim
 function startGame() { reset(); state = "play"; ov.hidden = true; }
 const debris = [];
 function crash() {
-  state = "over";
+  state = "over"; kit.sfx("boom");
   for (let i = 0; i < 40; i++) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(.6, .6, .6), new THREE.MeshBasicMaterial({ color: i % 3 ? 0xff7b39 : 0x444444 }));
     m.position.copy(pos); m.v = new THREE.Vector3((Math.random() - .5) * 40, Math.random() * 30, (Math.random() - .5) * 40); scene.add(m); debris.push(m);
@@ -196,13 +197,13 @@ function update(dt) {
   const r = rings[0], before = prevPos.clone().sub(r.pos).dot(r.normal), after = pos.clone().sub(r.pos).dot(r.normal);
   if (before < 0 && after >= 0) {
     const hit = pos.distanceTo(r.pos) < RING_R - .6;
-    if (hit) { score++; combo++; const bonus = Math.max(3.5, 7 - score * .08); timeLeft += bonus; energy = Math.min(1, energy + .25); pop(`+${bonus.toFixed(1)}s${combo > 2 ? `  ×${combo}` : ""}`); }
-    else { combo = 0; r.missed = true; pop("Missed"); }
+    if (hit) { kit.sfx("coin", 1 + Math.min(combo, 8) * .06); score++; combo++; const bonus = Math.max(3.5, 7 - score * .08); timeLeft += bonus; energy = Math.min(1, energy + .25); pop(`+${bonus.toFixed(1)}s${combo > 2 ? `  ×${combo}` : ""}`); }
+    else { combo = 0; r.missed = true; pop("Missed"); kit.sfx("pop", .6); }
     nextRing(hit);
   } else if (after < -400 && pos.distanceTo(r.pos) > 500) { combo = 0; pop("Ring lost"); nextRing(false); } // flew away from it
   r.m.rotation.z += dt * .5;
   timeLeft -= dt;
-  if (timeLeft <= 0) { timeLeft = 0; endGame("Time's up!"); }
+  if (timeLeft <= 0) { timeLeft = 0; kit.sfx("lose"); endGame("Time's up!"); }
   tl.innerHTML = `◯ ${score}<br><small>Best ${best}</small>`;
   time.textContent = timeLeft.toFixed(1); time.className = "hud" + (timeLeft < 5 ? " low" : "");
   tr.innerHTML = `${Math.round(speed * 3.6)} km/h<br>alt ${Math.round(pos.y)} m`;
@@ -221,7 +222,7 @@ const camPos = new THREE.Vector3(0, 100, -30);
 let last = 0;
 (function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000 || 0); last = now;
-  update(dt);
+  if (!kit.paused) update(dt);
   if (state !== "over" || plane.visible) {
     plane.position.copy(pos);
     plane.rotation.set(0, 0, 0, "YXZ"); plane.rotation.y = yaw; plane.rotation.x = -pitch; plane.rotation.z = roll;
@@ -249,6 +250,7 @@ addEventListener("pointerup", e => { if (e.isPrimary) drag.on = false; });
 // second finger = boost on touch
 addEventListener("touchstart", e => { if (e.touches.length > 1) drag.boost = true; });
 addEventListener("touchend", e => { if (e.touches.length < 2) drag.boost = false; });
+kit.pausable(() => state === "play");
 go.onclick = startGame;
 reset();
 window.__game = { keys, get state() { return state; }, get pos() { return pos; }, get rings() { return rings; }, get score() { return score; }, startGame, setYawPitch: (y, p) => { yaw = y; pitch = p; } };

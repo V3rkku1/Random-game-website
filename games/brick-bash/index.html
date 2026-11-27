@@ -9,8 +9,9 @@
 </style>
 </head>
 <body>
-<!-- skipped: power-ups, levels beyond endless refills, sound -->
+<!-- skipped: power-ups, levels beyond endless refills; sound via ../kit.js -->
 <canvas id="c" width="480" height="640"></canvas>
+<script src="../kit.js"></script>
 <script>
 const ctx = c.getContext("2d"), W = 480, H = 640, COLS = 8, ROWS = 6, BW = W / COLS, BH = 24;
 const hues = [0, 30, 55, 140, 200, 270];
@@ -32,18 +33,18 @@ function update(dt) {
   if (ball.y < 8) { ball.vy = Math.abs(ball.vy); }
   if (ball.vy > 0 && ball.y > H - 48 && ball.y < H - 30 && Math.abs(ball.x - pad.x) < pad.w / 2 + 8) {
     const sp = Math.hypot(ball.vx, ball.vy) * 1.01, a = (ball.x - pad.x) / (pad.w / 2) * 1.1; // edge hits angle out
-    ball.vx = sp * Math.sin(a); ball.vy = -sp * Math.cos(a);
+    ball.vx = sp * Math.sin(a); ball.vy = -sp * Math.cos(a); kit.sfx("bounce");
   }
-  if (ball.y > H + 10) { if (--lives <= 0) state = "over"; else serve(); }
+  if (ball.y > H + 10) { kit.sfx("lose"); if (--lives <= 0) state = "over"; else serve(); }
   for (const b of bricks) {
     if (ball.x > b.x - 8 && ball.x < b.x + BW + 8 && ball.y > b.y - 8 && ball.y < b.y + BH + 8) {
-      bricks.splice(bricks.indexOf(b), 1); score += (ROWS - b.r) * 10;
+      bricks.splice(bricks.indexOf(b), 1); score += (ROWS - b.r) * 10; kit.sfx("pop", 1 + (ROWS - b.r) * .12);
       const ox = Math.min(ball.x - b.x + 8, b.x + BW + 8 - ball.x), oy = Math.min(ball.y - b.y + 8, b.y + BH + 8 - ball.y);
       if (ox < oy) ball.vx *= -1; else ball.vy *= -1;
       break;
     }
   }
-  if (!bricks.length) { level++; build(); serve(); }
+  if (!bricks.length) { kit.sfx("win"); level++; build(); serve(); }
 }
 
 function draw() {
@@ -60,8 +61,9 @@ function draw() {
 }
 
 pad = { x: W / 2, w: 90 }; lives = 3; score = 0; level = 1; build(); serve();
+kit.pausable(() => state === "play");
 let last = 0;
-(function loop(now) { update(Math.min(.03, (now - last) / 1000 || 0)); last = now; draw(); requestAnimationFrame(loop); })(0);
+(function loop(now) { if (!kit.paused) update(Math.min(.03, (now - last) / 1000 || 0)); last = now; draw(); requestAnimationFrame(loop); })(0);
 
 const aim = x => { const r = c.getBoundingClientRect(); pad.x = Math.max(pad.w / 2, Math.min(W - pad.w / 2, (x - r.left) / r.width * W)); };
 addEventListener("pointermove", e => aim(e.clientX));
@@ -69,7 +71,7 @@ addEventListener("pointerdown", e => { aim(e.clientX); launch(); });
 const keys = {};
 addEventListener("keydown", e => { keys[e.code] = 1; if (e.code === "Space") { e.preventDefault(); launch(); } });
 addEventListener("keyup", e => keys[e.code] = 0);
-setInterval(() => { const d = (keys.ArrowRight || keys.KeyD) - (keys.ArrowLeft || keys.KeyA); if (d) pad.x = Math.max(pad.w / 2, Math.min(W - pad.w / 2, pad.x + d * 9)); }, 16);
+setInterval(() => { if (kit.paused) return; const d = (keys.ArrowRight || keys.KeyD) - (keys.ArrowLeft || keys.KeyA); if (d) pad.x = Math.max(pad.w / 2, Math.min(W - pad.w / 2, pad.x + d * 9)); }, 16);
 </script>
 </body>
 </html>

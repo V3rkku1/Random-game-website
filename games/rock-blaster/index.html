@@ -9,8 +9,9 @@
 </style>
 </head>
 <body>
-<!-- skipped: UFOs, hyperspace, sound -->
+<!-- skipped: UFOs, hyperspace; sound via ../kit.js -->
 <canvas id="c"></canvas>
+<script src="../kit.js"></script>
 <script>
 const ctx = c.getContext("2d");
 let W, H, ship, rocks = [], shots = [], parts = [], score = 0, lives, wave, state = "ready", cool = 0, inv = 0, best = 0;
@@ -43,16 +44,16 @@ function update(dt) {
   if (thrust) { ship.vx += Math.cos(ship.a) * 320 * dt; ship.vy += Math.sin(ship.a) * 320 * dt; }
   ship.vx *= .99; ship.vy *= .99; ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
   ship.thrust = thrust; inv -= dt; cool -= dt;
-  if (fire && cool <= 0) { cool = .2; shots.push({ x: ship.x + Math.cos(ship.a) * 14, y: ship.y + Math.sin(ship.a) * 14, vx: Math.cos(ship.a) * 600 + ship.vx, vy: Math.sin(ship.a) * 600 + ship.vy, life: 1 }); }
+  if (fire && cool <= 0) { cool = .2; kit.sfx("shoot"); shots.push({ x: ship.x + Math.cos(ship.a) * 14, y: ship.y + Math.sin(ship.a) * 14, vx: Math.cos(ship.a) * 600 + ship.vx, vy: Math.sin(ship.a) * 600 + ship.vy, life: 1 }); }
   for (const s of shots) { s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt; wrap(s); }
   for (const r of rocks) { r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.spin * dt; wrap(r); }
   for (const s of shots) for (const r of rocks) if (s.life > 0 && !r.dead && Math.hypot(s.x - r.x, s.y - r.y) < r.r) {
-    s.life = 0; r.dead = true; score += r.r > 40 ? 20 : r.r > 20 ? 50 : 100; boom(r.x, r.y, 12, "#ccc");
+    s.life = 0; r.dead = true; kit.sfx("knock", r.r > 40 ? .5 : r.r > 20 ? .8 : 1.2); score += r.r > 40 ? 20 : r.r > 20 ? 50 : 100; boom(r.x, r.y, 12, "#ccc");
     if (r.r > 15) rocks.push(rock(r.x, r.y, r.r / 2), rock(r.x, r.y, r.r / 2));
   }
   rocks = rocks.filter(r => !r.dead); shots = shots.filter(s => s.life > 0);
   if (inv <= 0) for (const r of rocks) if (Math.hypot(ship.x - r.x, ship.y - r.y) < r.r + 10) {
-    boom(ship.x, ship.y, 30, "#6cf"); lives--;
+    boom(ship.x, ship.y, 30, "#6cf"); lives--; kit.sfx("boom");
     if (!lives) { state = "over"; if (score > best) { best = score; try { localStorage.setItem("rock-best", best); } catch {} } }
     else { Object.assign(ship, { x: W / 2, y: H / 2, vx: 0, vy: 0 }); inv = 2.5; }
     break;
@@ -88,8 +89,9 @@ function draw() {
   }
 }
 
+kit.pausable(() => state === "play");
 let last = 0;
-(function loop(now) { update(Math.min(.033, (now - last) / 1000 || 0)); last = now; draw(); requestAnimationFrame(loop); })(0);
+(function loop(now) { if (!kit.paused) update(Math.min(.033, (now - last) / 1000 || 0)); last = now; draw(); requestAnimationFrame(loop); })(0);
 addEventListener("keydown", e => {
   keys[e.code] = true;
   if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();

@@ -10,8 +10,9 @@
 </style>
 </head>
 <body>
-<!-- skipped: sprites, sound, day/night cycle; everything is drawn with canvas shapes -->
+<!-- skipped: sprites, day/night cycle; everything is drawn with canvas shapes; sound via ../kit.js -->
 <canvas id="c" width="900" height="300"></canvas>
+<script src="../kit.js"></script>
 <script>
 const ctx = c.getContext("2d"), W = 900, GROUND = 250, G = 2600, JUMP = -820;
 let best = 0; try { best = +localStorage.getItem("desert-dash-best") || 0; } catch {}
@@ -26,7 +27,7 @@ const hitbox = () => p.duck && p.y === GROUND ? { x: p.x - 22, y: p.y - 26, w: 4
 
 function jump() {
   if (state !== "play") { reset(); state = "play"; }
-  else if (p.y === GROUND) p.vy = JUMP;
+  else if (p.y === GROUND) { p.vy = JUMP; kit.sfx("jump"); }
 }
 function spawn() {
   const fly = score > 300 && Math.random() < .3;
@@ -40,6 +41,7 @@ function update(dt) {
   t += dt;
   if (state !== "play") return;
   speed = Math.min(1100, speed + dt * 8);
+  if (((score + dt * speed / 40) / 100 | 0) > (score / 100 | 0)) kit.sfx("coin"); // every 100 points
   score += dt * speed / 40;
   p.vy += G * dt * (p.duck && p.y < GROUND ? 2.5 : 1); // duck in air = fast fall
   p.y = Math.min(GROUND, p.y + p.vy * dt);
@@ -52,7 +54,7 @@ function update(dt) {
   for (const o of obs) {
     const ox = o.x + 3, oy = o.y - o.h + 3, ow = o.w - 6, oh = o.h - 6;
     if (h.x < ox + ow && h.x + h.w > ox && h.y < oy + oh && h.y + h.h > oy) {
-      state = "over";
+      state = "over"; kit.sfx("hit");
       if (score > best) { best = score | 0; try { localStorage.setItem("desert-dash-best", best); } catch {} }
     }
   }
@@ -108,7 +110,7 @@ function draw() {
 }
 
 function loop(now) {
-  update(Math.min(.05, (now - last) / 1000 || 0)); last = now;
+  if (!kit.paused) update(Math.min(.05, (now - last) / 1000 || 0)); last = now;
   draw(); requestAnimationFrame(loop);
 }
 
@@ -121,6 +123,7 @@ addEventListener("keyup", e => { if (["ArrowDown", "KeyS"].includes(e.code)) p.d
 addEventListener("pointerdown", e => { if (state === "play" && e.clientY > innerHeight / 2) p.duck = true; else jump(); });
 addEventListener("pointerup", () => p.duck = false);
 
+kit.pausable(() => state === "play");
 reset(); requestAnimationFrame(loop);
 </script>
 </body>

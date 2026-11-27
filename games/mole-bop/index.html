@@ -15,13 +15,14 @@
 </style>
 </head>
 <body>
-<!-- skipped: sprites and sound; moles are CSS shapes + emoji faces -->
+<!-- skipped: sprites; moles are CSS shapes + emoji faces; sound via ../kit.js -->
 <div>
   <div id="hud">Score 0 · 30s</div>
   <div id="grid"></div>
   <button class="b" id="go">Start</button>
   <p>Bop the moles, not the bombs. Keys 1–9 work too.</p>
 </div>
+<script src="../kit.js"></script>
 <script>
 grid.innerHTML = Array.from({ length: 9 }, (_, i) => `<div class="h" data-i="${i}"><div class="m"></div></div>`).join("");
 const holes = [...grid.children];
@@ -44,11 +45,11 @@ function pop() {
 function bop(h) {
   if (!running || !h.classList.contains("up") || h.classList.contains("hit")) return;
   h.classList.add("hit");
-  score += h.dataset.bomb ? -5 : 1; hud2();
+  score += h.dataset.bomb ? -5 : 1; hud2(); kit.sfx(h.dataset.bomb ? "boom" : "pop");
   setTimeout(() => h.classList.remove("up"), 120);
 }
 function end() {
-  running = false; clearInterval(tick); holes.forEach(h => h.classList.remove("up"));
+  running = false; kit.sfx("win"); clearInterval(tick); holes.forEach(h => h.classList.remove("up"));
   if (score > best) { best = score; try { localStorage.setItem("mole-best", best); } catch {} }
   hud.textContent = `Time! Score ${score}${best ? ` · Best ${best}` : ""}`; go.hidden = false; go.textContent = "Play again";
 }

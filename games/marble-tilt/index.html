@@ -20,6 +20,7 @@
 <body>
 <!-- three.js r128 only; marble physics is hand-rolled 2D on the tile grid (circle vs box), no physics lib -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../kit.js"></script>
 <div id="hud"><span id="lv"></span><span id="tm">0.0s</span></div>
 <div id="banner"></div>
 <div id="ov"><div><h1 id="ovT">Marble Tilt</h1>
@@ -179,6 +180,7 @@ function collide() { // marble vs wall tiles in the 3x3 neighbourhood
     if (d >= R || d === 0) continue;
     const ux = dx / d, uz = dz / d, vn = vel[0] * ux + vel[1] * uz;
     pos[0] += ux * (R - d); pos[1] += uz * (R - d);
+    if (vn < -2.5) kit.sfx("bounce", .5);
     if (vn < 0) { vel[0] -= 1.45 * vn * ux; vel[1] -= 1.45 * vn * uz; } // restitution .45
   }
 }
@@ -219,14 +221,14 @@ function update(dt) {
   const sp = Math.hypot(vel[0], vel[1]);
   if (sp > 1e-4) marble.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(vel[1] / sp, 0, -vel[0] / sp), sp * dt / R));
   marble.position.set(pos[0], R, pos[1]);
-  if (overHole()) { falling = 1e-3; flash("Oops!", 600); return; }
+  if (overHole()) { falling = 1e-3; flash("Oops!", 600); kit.sfx("lose"); return; }
   if (Math.hypot(pos[0] - goal[0], pos[1] - goal[1]) < .42) {
-    if (level + 1 < LEVELS.length) { flash(`Level ${level + 1} clear!`); state = "pause"; setTimeout(() => { build(++level); state = "play"; }, 1100); }
+    if (level + 1 < LEVELS.length) { flash(`Level ${level + 1} clear!`); kit.sfx("win"); state = "pause"; setTimeout(() => { build(++level); state = "play"; }, 1100); }
     else finish();
   }
 }
 function finish() {
-  state = "over";
+  state = "over"; kit.sfx("win");
   const nb = !bestTotal || time < bestTotal;
   if (nb) { bestTotal = +time.toFixed(1); try { localStorage.setItem("marble-best", bestTotal); } catch {} }
   ovT.textContent = nb ? "New record!" : "All levels done!";
@@ -239,7 +241,7 @@ const wp = new THREE.Vector3();
 let last = 0;
 (function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000 || 0); last = now;
-  update(dt);
+  if (!kit.paused) update(dt);
   marble.getWorldPosition(wp);
   const look = state === "menu" ? new THREE.Vector3(0, 0, 0) : wp.setY(0);
   camera.position.lerp(new THREE.Vector3(look.x, 12.5, look.z + 8), state === "menu" ? 1 : Math.min(1, dt * 4));
@@ -254,6 +256,7 @@ addEventListener("keyup", e => keys[e.code] = 0);
 addEventListener("pointerdown", e => { if (e.target === renderer.domElement) Object.assign(drag, { on: true, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }); });
 addEventListener("pointermove", e => { if (drag.on) { drag.dx = e.clientX - drag.x; drag.dy = e.clientY - drag.y; } });
 addEventListener("pointerup", () => drag.on = false);
+kit.pausable(() => state === "play");
 go.onclick = startGame;
 build(0);
 </script>

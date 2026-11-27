@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Random Games</title>
+  <meta name="description" content="Free browser games for short breaks: arcade, puzzle, board and 3D games. Nothing to install.">
+  <meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161615" media="(prefers-color-scheme: dark)">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -22,9 +25,15 @@
   </header>
 
   <main id="games">
+    <section id="recent" hidden>
+      <h2>Continue playing</h2>
+      <div class="grid small" id="recent-grid"></div>
+    </section>
     <div class="toolbar">
       <div class="chips" id="chips"></div>
-      <input class="search" id="search" type="search" placeholder="Search" aria-label="Search games">
+      <span class="count" id="count"></span>
+      <select class="search sort" id="sort" aria-label="Sort games"><option value="">Featured</option><option value="new">Newest</option><option value="az">A–Z</option></select>
+      <input class="search" id="search" type="search" placeholder="Search  ( / )" aria-label="Search games">
     </div>
     <div class="grid" id="grid"></div>
   </main>

@@ -31,6 +31,7 @@
 <body>
 <!-- three.js r128 for rendering + cannon-es for pin physics (hand-rolling pin-on-pin rigid bodies would be far more code) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../kit.js"></script>
 <div id="card"></div>
 <div id="msg"></div>
 <div id="power"><div></div></div>
@@ -125,6 +126,7 @@ pinTex.wrapS = THREE.RepeatWrapping;
 const pinGeo = new THREE.LatheGeometry(pinProfile, 20);
 { const uv = pinGeo.attributes.uv, p = pinGeo.attributes.position; for (let i = 0; i < uv.count; i++) uv.setY(i, p.getY(i) / PIN_H); } // v = height
 const pinMat = new THREE.MeshStandardMaterial({ map: pinTex, roughness: .25 });
+const knock = {};
 const pins = PINS.map(() => {
   const mesh = new THREE.Group(), inner = new THREE.Mesh(pinGeo, pinMat);
   inner.position.y = -PIN_H / 2; inner.castShadow = true; mesh.add(inner); scene.add(mesh);
@@ -133,6 +135,10 @@ const pins = PINS.map(() => {
   body.addShape(new CANNON.Cylinder(.026, .045, .18, 8), new CANNON.Vec3(0, .1, 0));
   body.angularDamping = .3; body.linearDamping = .05;
   world.addBody(body);
+  body.addEventListener("collide", e => { // throttled clatter, louder hits only
+    const v = Math.abs(e.contact.getImpactVelocityAlongNormal()), now = performance.now();
+    if (v > 1 && now - (knock.t || 0) > 35) { knock.t = now; kit.sfx("knock", .8 + Math.random() * .5); }
+  });
   return { mesh, body, up: true };
 });
 
@@ -181,7 +187,7 @@ function throwBall(speed, angle, s) {
   resetBall(); world.addBody(ball); ball.wakeUp();
   ball.velocity.set(Math.sin(angle) * speed, 0, -Math.cos(angle) * speed);
   ball.angularVelocity.set(-speed / BR * .6, 0, 0); // mostly skidding at release, like a real throw
-  phase = "roll"; rollT = 0; settleT = 0; aimLine.visible = false;
+  phase = "roll"; rollT = 0; settleT = 0; aimLine.visible = false; kit.sfx("click", .5);
   power = 0; powerEl.style.opacity = 0; ui();
 }
 
@@ -201,6 +207,7 @@ function after() { // a roll has settled: score it and set up the next one
   else if (!first && f[f.length - 2] + down === 10 && (!tenth || f[f.length - 2] !== 10)) text = "Spare!";
   if (tenth && f.length === 3 && down === 10 && f[1] === 10) text = "STRIKE!";
   show(text);
+  if (text === "STRIKE!" || text === "Spare!") kit.sfx("win");
   let next = false, rerack = false;
   if (!tenth) { if (down === 10 && first || !first) next = rerack = true; }
   else {
@@ -270,7 +277,7 @@ function step(dt) {
 }
 (function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000 || 0); last = now;
-  if (phase !== "menu") { step(dt); world.step(1 / 120, dt, 8); }
+  if (phase !== "menu" && !kit.paused) { step(dt); world.step(1 / 120, dt, 8); }
   for (const p of pins) { p.mesh.position.copy(p.body.position); p.mesh.quaternion.copy(p.body.quaternion); }
   if (phase === "roll" || phase === "settle") { ballMesh.position.copy(ball.position); ballMesh.quaternion.copy(ball.quaternion); }
   else { ballMesh.position.set(ballX, BR, -.3); aimLine.position.set(ballX + Math.sin(aim) * 3, .003, -.3 - Math.cos(aim) * 3); aimLine.rotation.z = -aim; }
@@ -308,6 +315,7 @@ addEventListener("pointerup", () => {
   const mid = s[s.length >> 1], dev = (mid[0] - (x0 + x1) / 2) / px; // curvature: bow of the swipe path
   throwBall(3 + v / 420, ang, -dev / 40 + spin);
 });
+kit.pausable(() => phase === "roll" || phase === "aim");
 go.onclick = newGame;
 rackPins(true); resetBall(); ui();
 window.__game = { throwBall: (...a) => throwBall(...a), state: () => ({ phase, frame, frames: frames && frames.map(f => [...f]), score: frames && score(), up: countUp() }), newGame };

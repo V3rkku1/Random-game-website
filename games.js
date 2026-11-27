@@ -1,5 +1,6 @@
 // Game registry. To add a game: drop a folder in games/<id>/ with an index.html, then add one entry below.
-// Fields: id (folder name), title, desc, tags, emoji, colors [from, to]. Optional: thumb (image path), src (external game URL, plays in the player page), url (external link, leaves the site).
+// Fields: id (folder name), title, desc, tags, emoji, colors [from, to]. Optional: thumb (image path), src (external game URL, plays in the player page), url (external link, leaves the site),
+// best: [localStorage key, unit] to show the player's record on the card. List order = release order (newest last).
 window.GAMES = [
   { id: "neon-snake", thumb: "thumbs/neon-snake.jpg", title: "Snake", desc: "Eat, grow, chain combos, chase the golden star.", tags: ["arcade", "classic"], emoji: "🐍", colors: ["#00f5a0", "#00d9f5"] },
   { id: "orb-dodge", thumb: "thumbs/orb-dodge.jpg", title: "Orb Dodge", desc: "Survive the falling meteor storm.", tags: ["arcade", "action"], emoji: "☄️", colors: ["#ff512f", "#dd2476"] },
@@ -18,20 +19,20 @@ window.GAMES = [
   { id: "mine-grid", thumb: "thumbs/mine-grid.jpg", title: "Mine Grid", desc: "Reveal safe cells, flag the mines. Numbers count nearby bombs.", tags: ["puzzle", "classic"], emoji: "💣", colors: ["#5d7ef0"] },
   { id: "fort-frenzy", thumb: "thumbs/fort-frenzy.jpg", title: "Fort Frenzy", desc: "Build a 3D fort, research troops, gear up a hero, cast spells and raid enemy forts.", tags: ["strategy", "3d", "builder"], emoji: "🏰", colors: ["#ffb340"] },
   { id: "build-rush", thumb: "thumbs/build-rush.jpg", title: "Build Rush", desc: "First-person building and editing. Ramp rush, edit drills, free build.", tags: ["3d", "builder", "action"], emoji: "🧱", colors: ["#ffd166"] },
-  { id: "desert-dash", thumb: "thumbs/desert-dash.jpg", title: "Desert Dash", desc: "Endless runner. Jump rocks, duck bats, go as far as you can.", tags: ["arcade", "one-button"], emoji: "🦊", colors: ["#e8833a"] },
+  { id: "desert-dash", best: ["desert-dash-best"], thumb: "thumbs/desert-dash.jpg", title: "Desert Dash", desc: "Endless runner. Jump rocks, duck bats, go as far as you can.", tags: ["arcade", "one-button"], emoji: "🦊", colors: ["#e8833a"] },
   { id: "brick-bash", thumb: "thumbs/brick-bash.jpg", title: "Brick Bash", desc: "Bounce the ball, smash every brick. Paddle edges angle your shots.", tags: ["arcade", "classic"], emoji: "🧱", colors: ["#ff6b6b"] },
   { id: "tic-tac-toe", thumb: "thumbs/tic-tac-toe.jpg", title: "Tic Tac Toe", desc: "Three in a row vs an unbeatable CPU, an easy one, or a friend.", tags: ["board", "classic"], emoji: "❌", colors: ["#4fc3f7"] },
   { id: "four-in-a-row", thumb: "thumbs/four-in-a-row.jpg", title: "Four in a Row", desc: "Drop discs, line up four before the CPU does.", tags: ["board", "strategy"], emoji: "🔴", colors: ["#2456c8"] },
-  { id: "reflex", thumb: "thumbs/reflex.jpg", title: "Reflex", desc: "Wait for green, then click. How fast are you really?", tags: ["one-button", "skill"], emoji: "⚡", colors: ["#27ae60"] },
-  { id: "echo-pads", thumb: "thumbs/echo-pads.jpg", title: "Echo Pads", desc: "Watch the light-and-tone pattern, repeat it. It grows every round.", tags: ["memory", "music"], emoji: "🎹", colors: ["#3498db"] },
-  { id: "mole-bop", thumb: "thumbs/mole-bop.jpg", title: "Mole Bop", desc: "30 seconds. Bop moles, dodge bombs.", tags: ["arcade", "skill"], emoji: "🔨", colors: ["#7cbf4a"] },
+  { id: "reflex", best: ["reflex-best", " ms"], thumb: "thumbs/reflex.jpg", title: "Reflex", desc: "Wait for green, then click. How fast are you really?", tags: ["one-button", "skill"], emoji: "⚡", colors: ["#27ae60"] },
+  { id: "echo-pads", best: ["echo-best", " rounds"], thumb: "thumbs/echo-pads.jpg", title: "Echo Pads", desc: "Watch the light-and-tone pattern, repeat it. It grows every round.", tags: ["memory", "music"], emoji: "🎹", colors: ["#3498db"] },
+  { id: "mole-bop", best: ["mole-best"], thumb: "thumbs/mole-bop.jpg", title: "Mole Bop", desc: "30 seconds. Bop moles, dodge bombs.", tags: ["arcade", "skill"], emoji: "🔨", colors: ["#7cbf4a"] },
   { id: "slide-15", thumb: "thumbs/slide-15.jpg", title: "Slide 15", desc: "Classic sliding tile puzzle. Put 1 to 15 back in order.", tags: ["puzzle", "classic"], emoji: "🔢", colors: ["#a5673f"] },
-  { id: "rock-blaster", thumb: "thumbs/rock-blaster.jpg", title: "Rock Blaster", desc: "Thrust, turn and shoot. Split the space rocks before they split you.", tags: ["arcade", "shooter"], emoji: "🚀", colors: ["#6cf"] },
+  { id: "rock-blaster", best: ["rock-best"], thumb: "thumbs/rock-blaster.jpg", title: "Rock Blaster", desc: "Thrust, turn and shoot. Split the space rocks before they split you.", tags: ["arcade", "shooter"], emoji: "🚀", colors: ["#6cf"] },
   { id: "lumen-grid", thumb: "thumbs/lumen-grid.jpg", title: "Lumen Grid", desc: "Each tap flips a light and its neighbours. Turn them all off.", tags: ["puzzle", "logic"], emoji: "💡", colors: ["#ffd54f"] },
   { id: "color-flood", thumb: "thumbs/color-flood.jpg", title: "Color Flood", desc: "Flood the board with one colour in 25 moves.", tags: ["puzzle"], emoji: "🎨", colors: ["#ef476f"] },
-  { id: "sky-hopper", thumb: "thumbs/sky-hopper.jpg", title: "Sky Hopper", desc: "3D endless runner on a road in the clouds. Switch lanes, jump, slide, grab rings.", tags: ["3d", "arcade", "runner"], emoji: "🤖", colors: ["#2ec4b6"] },
-  { id: "marble-tilt", thumb: "thumbs/marble-tilt.jpg", title: "Marble Tilt", desc: "Tilt the 3D board to roll the marble past holes and bridges to the goal. 6 levels.", tags: ["3d", "puzzle", "physics"], emoji: "🔵", colors: ["#7b4f9e"] },
-  { id: "strike-alley", thumb: "thumbs/strike-alley.jpg", title: "Strike Alley", desc: "10-frame bowling with real pin physics. Swipe to bowl, curve it for hook.", tags: ["3d", "sports", "physics"], emoji: "🎳", colors: ["#ff4d6d"] },
-  { id: "drift-circuit", thumb: "thumbs/drift-circuit.jpg", title: "Drift Circuit", desc: "3-lap race vs 3 rivals. Drift through corners to charge boost.", tags: ["3d", "racing"], emoji: "🏁", colors: ["#3a86ff"] },
-  { id: "ring-flyer", thumb: "thumbs/ring-flyer.jpg", title: "Ring Flyer", desc: "Glide over endless 3D mountains. Fly through rings to earn time.", tags: ["3d", "flying", "arcade"], emoji: "🛩️", colors: ["#ffc83d"] },
+  { id: "sky-hopper", best: ["sky-best"], thumb: "thumbs/sky-hopper.jpg", title: "Sky Hopper", desc: "3D endless runner on a road in the clouds. Switch lanes, jump, slide, grab rings.", tags: ["3d", "arcade", "runner"], emoji: "🤖", colors: ["#2ec4b6"] },
+  { id: "marble-tilt", best: ["marble-best", "s"], thumb: "thumbs/marble-tilt.jpg", title: "Marble Tilt", desc: "Tilt the 3D board to roll the marble past holes and bridges to the goal. 6 levels.", tags: ["3d", "puzzle", "physics"], emoji: "🔵", colors: ["#7b4f9e"] },
+  { id: "strike-alley", best: ["strike-best"], thumb: "thumbs/strike-alley.jpg", title: "Strike Alley", desc: "10-frame bowling with real pin physics. Swipe to bowl, curve it for hook.", tags: ["3d", "sports", "physics"], emoji: "🎳", colors: ["#ff4d6d"] },
+  { id: "drift-circuit", best: ["drift-race", "s"], thumb: "thumbs/drift-circuit.jpg", title: "Drift Circuit", desc: "3-lap race vs 3 rivals. Drift through corners to charge boost.", tags: ["3d", "racing"], emoji: "🏁", colors: ["#3a86ff"] },
+  { id: "ring-flyer", best: ["ring-best", " rings"], thumb: "thumbs/ring-flyer.jpg", title: "Ring Flyer", desc: "Glide over endless 3D mountains. Fly through rings to earn time.", tags: ["3d", "flying", "arcade"], emoji: "🛩️", colors: ["#ffc83d"] },
 ];

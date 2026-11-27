@@ -19,6 +19,7 @@
 <body>
 <!-- three.js r128 (same CDN as the site's other 3D games); no physics lib needed: lanes + boxes -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../kit.js"></script>
 <div id="hud"><span id="sc">0</span><span id="co">◎ 0</span></div>
 <div id="ov"><div><h1 id="ovT">Sky Hopper</h1>
   <p id="ovP">Race the hover-bot along the sky road.<br>← → switch lanes · ↑ / Space jump · ↓ slide<br>On touch: swipe. Grab rings, dodge the rest.</p>
@@ -133,14 +134,14 @@ function reset() {
 }
 function start() { reset(); state = "play"; ov.hidden = true; }
 function over() {
-  state = "over"; shake = .4;
+  state = "over"; shake = .4; kit.sfx("hit");
   const score = Math.floor(dist) + coins * 10;
   const nb = score > best; if (nb) { best = score; try { localStorage.setItem("sky-best", best); } catch {} }
   setTimeout(() => { ovT.textContent = nb ? "New best!" : "Crashed!"; ovP.innerHTML = `Score <b>${score}</b> · ${coins} rings · ${Math.floor(dist)} m<br>Best ${best}`; go.textContent = "Again"; ov.hidden = false; }, 700);
 }
 
 function move(d) { if (state === "play") lane = Math.max(0, Math.min(2, lane + d)); }
-function jump() { if (state === "play" && y <= 0.001) { vy = 9.5; slide = 0; } }
+function jump() { if (state === "play" && y <= 0.001) { vy = 9.5; slide = 0; kit.sfx("jump"); } }
 function duck() { if (state !== "play") return; slide = .7; if (y > 0) vy = -16; }
 
 function update(dt) {
@@ -166,7 +167,7 @@ function update(dt) {
     if (o.kind === "ring") m.rotation.y += dt * 4;
     if (m.position.z > 6) { scene.remove(m); things.splice(i, 1); continue; }
     if (Math.abs(m.position.z) > (o.kind === "crate" ? 1.3 : .6) || Math.abs(LANES[o.lane] - x) > 1.1) continue;
-    if (o.kind === "ring") { if (Math.abs(o.y - (y + top / 2)) < 1.2) { coins++; scene.remove(m); things.splice(i, 1); } continue; }
+    if (o.kind === "ring") { if (Math.abs(o.y - (y + top / 2)) < 1.2) { coins++; kit.sfx("coin", 1 + (coins % 6) * .06); scene.remove(m); things.splice(i, 1); } continue; }
     if (o.kind === "low" && y > .7) continue;
     if (o.kind === "high" && y + top < 1.4) continue;
     return over();
@@ -182,7 +183,7 @@ function update(dt) {
 let last = 0;
 (function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000 || 0); last = now;
-  update(dt);
+  if (!kit.paused) update(dt);
   shake = Math.max(0, shake - dt);
   camera.position.set(bot.position.x * .6 + (Math.random() - .5) * shake, 3.6 + y * .4, 7.5);
   camera.lookAt(bot.position.x * .4, 1.2 + y * .3, -8);
@@ -206,6 +207,7 @@ addEventListener("pointerup", e => {
   if (Math.max(Math.abs(dx), Math.abs(dy)) < 25) return jump(); // tap = jump
   Math.abs(dx) > Math.abs(dy) ? move(Math.sign(dx)) : dy < 0 ? jump() : duck();
 });
+kit.pausable(() => state === "play");
 go.onclick = e => { e.stopPropagation(); start(); };
 reset();
 </script>
