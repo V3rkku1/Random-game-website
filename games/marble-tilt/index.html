@@ -223,12 +223,12 @@ function update(dt) {
   marble.position.set(pos[0], R, pos[1]);
   if (overHole()) { falling = 1e-3; flash("Oops!", 600); kit.sfx("lose"); return; }
   if (Math.hypot(pos[0] - goal[0], pos[1] - goal[1]) < .42) {
-    if (level + 1 < LEVELS.length) { flash(`Level ${level + 1} clear!`); kit.sfx("win"); state = "pause"; setTimeout(() => { build(++level); state = "play"; }, 1100); }
+    if (level + 1 < LEVELS.length) { flash(`Level ${level + 1} clear!`); kit.sfx("win"); kit.xp(25 + level * 5, `level ${level + 1}`); state = "pause"; setTimeout(() => { build(++level); state = "play"; }, 1100); }
     else finish();
   }
 }
 function finish() {
-  state = "over"; kit.sfx("win");
+  state = "over"; kit.sfx("win"); kit.xp(120, "all levels");
   const nb = !bestTotal || time < bestTotal;
   if (nb) { bestTotal = +time.toFixed(1); try { localStorage.setItem("marble-best", bestTotal); } catch {} }
   ovT.textContent = nb ? "New record!" : "All levels done!";

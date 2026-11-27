@@ -24,6 +24,7 @@ function rock(x, y, r) {
   return { x, y, r, pts, vx: Math.cos(a) * s, vy: Math.sin(a) * s, spin: Math.random() - .5, rot: 0 };
 }
 function newWave() {
+  if (wave) kit.xp(15 + wave * 5, `wave ${wave}`);
   wave++;
   for (let i = 0; i < 3 + wave; i++) { const edge = Math.random() < .5; rocks.push(rock(edge ? 0 : Math.random() * W, edge ? Math.random() * H : 0, 50)); }
 }
@@ -54,7 +55,7 @@ function update(dt) {
   rocks = rocks.filter(r => !r.dead); shots = shots.filter(s => s.life > 0);
   if (inv <= 0) for (const r of rocks) if (Math.hypot(ship.x - r.x, ship.y - r.y) < r.r + 10) {
     boom(ship.x, ship.y, 30, "#6cf"); lives--; kit.sfx("boom");
-    if (!lives) { state = "over"; if (score > best) { best = score; try { localStorage.setItem("rock-best", best); } catch {} } }
+    if (!lives) { state = "over"; kit.xp(score / 25, "game over"); if (score > best) { best = score; try { localStorage.setItem("rock-best", best); } catch {} } }
     else { Object.assign(ship, { x: W / 2, y: H / 2, vx: 0, vy: 0 }); inv = 2.5; }
     break;
   }

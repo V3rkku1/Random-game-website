@@ -26,6 +26,7 @@
 <div id="ov"><div><h1 id="ovT">Ping Pong</h1>
   <p id="ovP">Move to place your paddle. It hits the ball when they meet.<br>Swing sideways to angle the shot, and swing forward to hit harder (it may go long).<br>Click or tap to serve. First to 11 wins, by 2.</p>
   <button data-d="0">Easy</button><button data-d="1">Normal</button><button data-d="2">Hard</button></div></div>
+<script src="../kit.js"></script>
 <script>
 // Canvas 2D + hand-rolled ball physics (height via shadow), no libraries. Units: metres, real table size.
 // shortcut: serves skip the "bounce on own side first" rule; add if anyone cares.
@@ -128,7 +129,7 @@ function physics(dt) {
 function end() {
   const [a, b] = [score.p, score.a];
   if (Math.max(a, b) < 11 || Math.abs(a - b) < 2) return false;
-  phase = "over"; $("ovT").textContent = a > b ? "You win!" : "You lose"; $("ovP").textContent = `${a} – ${b}. Play again?`; $("ov").hidden = false;
+  phase = "over"; kit.xp(a > b ? 60 : 10 + a * 2, a > b ? "match won" : "match"); $("ovT").textContent = a > b ? "You win!" : "You lose"; $("ovP").textContent = `${a} – ${b}. Play again?`; $("ov").hidden = false;
   return true;
 }
 

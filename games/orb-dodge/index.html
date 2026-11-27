@@ -5,60 +5,98 @@
 <title>Orb Dodge</title>
 <style>
   body { margin: 0; overflow: hidden; background: #0b0512; color: #fff; font: 600 18px system-ui; touch-action: none; cursor: none; }
-  #hud { position: fixed; top: 12px; left: 16px; }
-  #msg { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; text-shadow: 0 0 14px #ff512f; pointer-events: none; }
+  #hud { position: fixed; top: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between; pointer-events: none; }
+  #msg { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; text-shadow: 0 0 14px #ff512f; pointer-events: none; line-height: 1.5; }
+  #bn { position: fixed; top: 30%; left: 0; right: 0; text-align: center; font: 900 44px system-ui; text-shadow: 0 0 20px #ff512f; pointer-events: none; opacity: 0; transition: opacity .3s; }
 </style>
 </head>
 <body>
+<!-- levels every 15 s add a new orb type; pickups: shield, slow-mo, star. Canvas 2D only. -->
 <canvas id="c"></canvas>
-<div id="hud">Time: <span id="t">0.0</span>s · Best: <span id="b">0.0</span>s</div>
-<div id="msg">Move with mouse / touch / arrows<br>Click or press a key to start</div>
+<div id="hud"><span>Lv <b id="lv">1</b> · <span id="t">0.0</span>s <span id="fx"></span></span><span>Best: <span id="b">0.0</span>s</span></div>
+<div id="bn"></div>
+<div id="msg">Move with mouse / touch / arrows<br>Grab 🛡 shields, ⧗ slow-mo and ★ stars<br>Click or press a key to start</div>
+<script src="../kit.js"></script>
 <script>
-const ctx = c.getContext("2d");
-let W, H, p, rocks, alive = false, t0, last, keys = {};
+const ctx = c.getContext("2d"), LEVEL_SECS = 15;
+const TYPES = ["Fast orbs!", "Zig-zag orbs!", "Seeker orbs!", "Giant orbs!", "Orb storm!"]; // banner for each new level
+let W, H, p, rocks, items, alive = false, t0, last, keys = {}, secs, level, shield, slow, starCount, deadAt = -1e9;
 let best = 0; try { best = +localStorage.dodgeBest || 0; } catch {}
 b.textContent = best.toFixed(1);
 const fit = () => { W = c.width = innerWidth; H = c.height = innerHeight; };
 addEventListener("resize", fit); fit();
+function banner(text) { bn.textContent = text; bn.style.opacity = 1; clearTimeout(banner.t); banner.t = setTimeout(() => bn.style.opacity = 0, 1400); }
 function start() {
-  p = { x: W / 2, y: H * 0.8, r: 12 }; rocks = []; alive = true; t0 = last = performance.now(); msg.style.display = "none";
+  if (performance.now() - deadAt < 700) return; // don't restart from a key still held at death
+  p = { x: W / 2, y: H * 0.8, r: 12 }; rocks = []; items = []; alive = true; secs = 0; level = 1; shield = 0; slow = 0; starCount = 0;
+  last = performance.now(); msg.style.display = "none"; lv.textContent = 1;
   requestAnimationFrame(frame);
+}
+function spawnRock() {
+  const kind = level >= 4 && Math.random() < .12 ? "giant" : level >= 3 && Math.random() < .18 ? "seek" : level >= 2 && Math.random() < .25 ? "zig" : "plain";
+  const r = kind === "giant" ? 40 + Math.random() * 20 : 8 + Math.random() * 22;
+  rocks.push({ kind, x: Math.random() * W, y: -r - 10, r, v: (kind === "giant" ? 1.5 : 2 + Math.random() * 3) + secs * 0.06, h: kind === "seek" ? 280 : kind === "zig" ? 120 : Math.random() * 60, ph: Math.random() * 6, x0: 0 });
 }
 function frame(now) {
   if (!alive) return;
-  const dt = (now - last) / 16.7, secs = (now - t0) / 1000; last = now;
+  let dt = Math.min(3, (now - last) / 16.7); last = now; // clamp: no teleporting after a stall
+  if (kit.paused) return requestAnimationFrame(frame);
+  secs += dt / 60;
   t.textContent = secs.toFixed(1);
-  const sp = 7 * dt;
+  const L = Math.min(TYPES.length, 1 + Math.floor(secs / LEVEL_SECS));
+  if (L > level) { level = L; lv.textContent = level; banner(`Level ${level} · ${TYPES[level - 1]}`); kit.sfx("win"); kit.xp(15, `level ${level}`); }
+  slow = Math.max(0, slow - dt / 60); shield = Math.max(0, shield - dt / 60);
+  fx.textContent = (shield ? " 🛡" : "") + (slow ? " ⧗" : "") + (starCount ? ` ★${starCount}` : "");
+  const sp = 7 * dt, wd = dt * (slow ? .4 : 1); // world dt
   if (keys.ArrowLeft || keys.a) p.x -= sp; if (keys.ArrowRight || keys.d) p.x += sp;
   if (keys.ArrowUp || keys.w) p.y -= sp; if (keys.ArrowDown || keys.s) p.y += sp;
   p.x = Math.max(p.r, Math.min(W - p.r, p.x)); p.y = Math.max(p.r, Math.min(H - p.r, p.y));
-  if (Math.random() < (0.03 + secs * 0.004) * dt)
-    rocks.push({ x: Math.random() * W, y: -30, r: 8 + Math.random() * 22, v: 2 + Math.random() * 3 + secs * 0.08, h: Math.random() * 60 });
+  if (Math.random() < (0.03 + secs * 0.004 + (level >= 5 ? .03 : 0)) * wd) spawnRock();
+  if (Math.random() < .004 * dt) items.push({ k: ["🛡", "⧗", "★", "★"][Math.random() * 4 | 0], x: 30 + Math.random() * (W - 60), y: -20 });
   ctx.fillStyle = "rgba(11,5,18,.35)"; ctx.fillRect(0, 0, W, H); // trails
   ctx.shadowBlur = 20;
   for (const r of rocks) {
-    r.y += r.v * dt;
+    r.y += r.v * wd;
+    if (r.kind === "zig") r.x += Math.sin(r.y / 40 + r.ph) * 3 * wd;
+    if (r.kind === "seek" && r.y < p.y) r.x += Math.sign(p.x - r.x) * .9 * wd;
     ctx.shadowColor = ctx.fillStyle = `hsl(${r.h}, 100%, 60%)`;
     ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 7); ctx.fill();
-    if (Math.hypot(r.x - p.x, r.y - p.y) < r.r + p.r) return over(secs);
+    if (!r.gone && Math.hypot(r.x - p.x, r.y - p.y) < r.r + p.r) {
+      if (shield) { shield = 0; r.gone = true; kit.sfx("knock"); banner("Shield broke!"); }
+      else return over();
+    }
   }
-  rocks = rocks.filter(r => r.y < H + 40);
+  rocks = rocks.filter(r => r.y < H + 80 && !r.gone);
+  ctx.shadowBlur = 0; ctx.font = "28px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (const it of items) {
+    it.y += 2.2 * dt; ctx.fillStyle = "#fff"; ctx.fillText(it.k, it.x, it.y);
+    if (Math.hypot(it.x - p.x, it.y - p.y) < 26) {
+      it.y = H + 99; kit.sfx("coin");
+      if (it.k === "🛡") shield = 8; else if (it.k === "⧗") slow = 4; else { starCount++; secs += 2; }
+    }
+  }
+  items = items.filter(it => it.y < H + 30);
+  ctx.shadowBlur = 20;
   ctx.shadowColor = ctx.fillStyle = "#22d3ee";
   ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+  if (shield) { ctx.strokeStyle = "#a5f3fc"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 7, 0, 7); ctx.stroke(); }
   ctx.shadowBlur = 0;
   requestAnimationFrame(frame);
 }
-function over(secs) {
-  alive = false;
-  if (secs > best) { best = secs; b.textContent = best.toFixed(1); try { localStorage.dodgeBest = best; } catch {} }
-  msg.innerHTML = `💥 ${secs.toFixed(1)}s<br>Click or press a key`; msg.style.display = "";
+function over() {
+  alive = false; deadAt = performance.now(); kit.sfx("boom");
+  kit.xp(secs * 2 + starCount * 5, `${secs.toFixed(0)}s survived`);
+  const nb = secs > best;
+  if (nb) { best = secs; b.textContent = best.toFixed(1); try { localStorage.dodgeBest = best; } catch {} }
+  msg.innerHTML = `💥 ${secs.toFixed(1)}s · level ${level}${nb ? " · new best!" : ""}<br>Click or press a key`; msg.style.display = "";
 }
 const move = (x, y) => { if (alive) { p.x = x; p.y = y; } };
 addEventListener("mousemove", e => move(e.clientX, e.clientY));
-addEventListener("touchmove", e => move(e.touches[0].clientX, e.touches[0].clientY - 40));
+addEventListener("touchmove", e => { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY - 40); }, { passive: false });
 addEventListener("pointerdown", () => alive || start());
-addEventListener("keydown", e => { keys[e.key] = true; if (!alive) start(); });
+addEventListener("keydown", e => { keys[e.key] = true; if (!alive && !["p", "P", "m", "M", "Escape"].includes(e.key)) start(); });
 addEventListener("keyup", e => keys[e.key] = false);
+kit.pausable(() => alive);
 </script>
 </body>
 </html>

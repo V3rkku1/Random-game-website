@@ -1,5 +1,5 @@
 // Shared game helpers: synth sound effects (Web Audio, no audio files), M to mute, P/Esc to pause.
-// Usage: <script src="../kit.js"></script>, then kit.sfx("jump"), kit.pausable(() => state === "play"), and skip update() while kit.paused.
+// Usage: <script src="../kit.js"></script>, then kit.sfx("jump"), kit.xp(25, "why"), kit.pausable(() => state === "play"), and skip update() while kit.paused.
 (() => {
   let ac, noiseBuf, muted = false;
   try { muted = localStorage.getItem("kit-muted") === "1"; } catch {}
@@ -37,7 +37,21 @@
     win: p => [523, 659, 784, 1047].forEach((f, i) => tone("triangle", f * p, f * p, .16, .14, i * .09)),
     lose: p => tone("sawtooth", 320 * p, 70 * p, .55, .12),
   };
+  // XP: one shared pot across all games (localStorage, same origin as the site). Level L starts at 50*L*(L-1) XP.
+  const GAME = (location.pathname.match(/games\/([^/]+)\//) || [])[1] || "game";
+  const num = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
+  let lastOnce;
+  const levelOf = xp => Math.floor((1 + Math.sqrt(1 + xp / 12.5)) / 2);
   const kit = window.kit = {
+    levelOf, need: L => 50 * L * (L - 1),
+    get xpTotal() { return num("kit-xp"); },
+    xp(n, why = "", once) { // award XP; toast it; celebrate level-ups. `once`: skip if same token as last award (end screens that re-render)
+      n = Math.round(n); if (!(n > 0) || (once != null && once === lastOnce)) return; lastOnce = once;
+      const before = num("kit-xp"), after = before + n;
+      try { localStorage.setItem("kit-xp", after); localStorage.setItem("kit-xp:" + GAME, num("kit-xp:" + GAME) + n); } catch {}
+      const L0 = levelOf(before), L1 = levelOf(after);
+      if (L1 > L0) { toast(`⭐ Level ${L1}!`, 1800); kit.sfx("win"); } else toast(`+${n} XP${why ? " · " + why : ""}`);
+    },
     paused: false,
     get muted() { return muted; },
     sfx(name, pitch = 1) { if (muted || kit.paused) return; try { SFX[name](pitch); } catch {} },
@@ -70,12 +84,12 @@
     overlay.onpointerdown = overlay.onpointerup = e => e.stopPropagation(); // the game must not see the resume tap
     document.body.append(overlay);
   }
-  function toast(text) {
+  function toast(text, ms = 1100) {
     if (!toastEl) { toastEl = document.createElement("div"); toastEl.style.cssText = "position:fixed;z-index:10000;left:50%;bottom:20%;transform:translateX(-50%);padding:8px 16px;border-radius:99px;background:#000b;color:#fff;font:700 15px system-ui;pointer-events:none;transition:opacity .3s"; document.body.append(toastEl); }
-    toastEl.textContent = text; toastEl.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => toastEl.style.opacity = 0, 1100);
+    toastEl.textContent = text; toastEl.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => toastEl.style.opacity = 0, ms);
   }
   addEventListener("keydown", e => { // registered before the game's own listeners, so it can swallow keys while paused
-    if (e.code === "KeyM" && !e.repeat) kit.toggleMute();
+    if (e.code === "KeyM" && !e.repeat && kit.keys !== false) kit.toggleMute(); // typing games set kit.keys = false
     else if ((e.code === "KeyP" || e.code === "Escape") && !e.repeat && active) kit.setPaused(!kit.paused);
     else if (kit.paused) { e.stopImmediatePropagation(); e.preventDefault(); }
   }, true);

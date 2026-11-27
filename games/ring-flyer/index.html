@@ -197,7 +197,7 @@ function update(dt) {
   const r = rings[0], before = prevPos.clone().sub(r.pos).dot(r.normal), after = pos.clone().sub(r.pos).dot(r.normal);
   if (before < 0 && after >= 0) {
     const hit = pos.distanceTo(r.pos) < RING_R - .6;
-    if (hit) { kit.sfx("coin", 1 + Math.min(combo, 8) * .06); score++; combo++; const bonus = Math.max(3.5, 7 - score * .08); timeLeft += bonus; energy = Math.min(1, energy + .25); pop(`+${bonus.toFixed(1)}s${combo > 2 ? `  ×${combo}` : ""}`); }
+    if (hit) { kit.sfx("coin", 1 + Math.min(combo, 8) * .06); score++; combo++; kit.xp(5); const bonus = Math.max(3.5, 7 - score * .08); timeLeft += bonus; energy = Math.min(1, energy + .25); pop(`+${bonus.toFixed(1)}s${combo > 2 ? `  ×${combo}` : ""}`); }
     else { combo = 0; r.missed = true; pop("Missed"); kit.sfx("pop", .6); }
     nextRing(hit);
   } else if (after < -400 && pos.distanceTo(r.pos) > 500) { combo = 0; pop("Ring lost"); nextRing(false); } // flew away from it

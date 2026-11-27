@@ -38,6 +38,7 @@
 <div id="toast"></div>
 <div class="ov" id="menu"><div class="card"><h1>Gravity Golf</h1><p>Drag back from anywhere and release to shoot.<br>Planets pull the ball. Land on them to rest.</p><div id="grid"></div></div></div>
 <div class="ov" id="done" hidden><div class="card"><div class="stars" id="st"></div><h1 id="dt"></h1><p id="dp"></p><button id="again">Retry</button> <button class="main" id="next">Next hole</button></div></div>
+<script src="../kit.js"></script>
 <script>
 // Hand-rolled point-mass gravity (a = G·r²/d²) with fixed-step integration; no physics engine needed.
 const LEVELS = [
@@ -119,6 +120,7 @@ function update(dt) {
 function finish() {
   mode = "done";
   const s = strokes <= L.par ? 3 : strokes === L.par + 1 ? 2 : 1;
+  kit.xp(10 + s * 10, `hole ${li + 1}`);
   starsSaved[li] = Math.max(starsSaved[li] || 0, s); store("golfStars", JSON.stringify(starsSaved));
   st.innerHTML = [0, 1, 2].map(i => `<span class="${i < s ? "" : "off"}" style="animation-delay:${.15 + i * .15}s">⭐</span>`).join("");
   const diff = strokes - L.par;

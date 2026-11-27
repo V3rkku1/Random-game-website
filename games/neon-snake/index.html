@@ -41,6 +41,7 @@
   <button id="mu" aria-label="Toggle sound">🔊</button>
 </div>
 <div id="wrap"><canvas id="c"></canvas><div id="ov"></div></div>
+<script src="../kit.js"></script>
 <script>
 // Single file, canvas 2D + WebAudio. No engine/library needed at this size.
 const N = 20, ctx = c.getContext("2d"), board = document.createElement("canvas");
@@ -118,7 +119,7 @@ function eatBonus() {
   bonus = null; hud();
 }
 function die() {
-  state = "dead"; shake = 16;
+  state = "dead"; shake = 16; kit.xp(score * 2, "snake");
   beep(220, .5, "sawtooth", .12, .25);
   const isBest = score > best, n = snake.length;
   if (isBest) { best = score; store("snakeBest", best); }

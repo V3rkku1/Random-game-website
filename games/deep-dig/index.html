@@ -38,6 +38,7 @@
 <dialog id="shop"><h2>Surface Shop</h2><p id="cash"></p><button id="upPick"></button><button id="upLamp"></button><form method="dialog"><button>Back to digging</button></form></dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../kit.js"></script>
 <script>
 // Voxel world = Uint8Array, one merged mesh per 8-layer slab with hidden faces culled. No engine, no physics lib: AABB vs grid.
 const X = 24, Z = 24, Y = 64, SURF = 52, CH = 8, $ = id => document.getElementById(id);
@@ -348,7 +349,7 @@ $("upPick").onclick = () => { money -= PICK[++pickLvl].cost; headMat.color.setHe
 $("upLamp").onclick = () => { money -= LAMP[++lampLvl].cost; fuel = LAMP[lampLvl].fuel; tone(1000, .2); shop(); };
 $("shop").addEventListener("close", () => { $("ov").hidden = false; $("ovT").textContent = "Deep Dig"; $("ovP").textContent = ""; $("ovB").textContent = "Click to keep digging"; });
 function win() {
-  st = "won"; document.exitPointerLock?.();
+  st = "won"; document.exitPointerLock?.(); kit.xp(300, "Heart Crystal");
   const m = playTime / 60 | 0, s = String(playTime % 60 | 0).padStart(2, "0");
   $("ovT").textContent = "You reached the Heart!"; $("ovP").textContent = `Crystal mined in ${m}:${s}.`; $("ovB").textContent = "Click to dig a new world"; $("ov").hidden = false;
 }

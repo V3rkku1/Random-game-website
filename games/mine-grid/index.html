@@ -46,6 +46,7 @@
 </div>
 <div id="wrap"><div id="grid"></div></div>
 <div id="msg">Right-click or long-press to flag · click a number to clear around it</div>
+<script src="../kit.js"></script>
 <script>
 // Plain DOM grid; flood fill is BFS so reveal animation can be staggered by distance.
 const SIZES = { easy: [9, 9, 10, 40], medium: [16, 16, 40, 32], hard: [30, 16, 99, 28] }; // cols, rows, mines, cell px
@@ -121,7 +122,7 @@ function lose(i) {
 }
 function checkWin() {
   if (opened !== cols * rows - total) return;
-  over = true; clearInterval(timer); face.textContent = "😎";
+  over = true; clearInterval(timer); face.textContent = "😎"; kit.xp({ easy: 20, medium: 50, hard: 120 }[size] || 30, `cleared ${size}`);
   cells.forEach((c, i) => { if (c.mine && !c.flag) { c.flag = true; els[i].classList.add("f"); } });
   flags = total; hud();
   const t = (Date.now() - t0) / 1000 | 0, b = +store("mineBest_" + size) || Infinity;

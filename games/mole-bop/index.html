@@ -9,6 +9,7 @@
   .h { aspect-ratio: 1; border-radius: 50%; background: radial-gradient(#3e2a14 55%, #5a3d1e 56%); position: relative; overflow: hidden; cursor: pointer; }
   .m { position: absolute; left: 15%; width: 70%; height: 80%; top: 100%; border-radius: 45% 45% 20% 20%; background: #8d6239; transition: top .12s; display: grid; place-items: start center; padding-top: 18%; font-size: min(6vw, 26px); }
   .m.bomb { background: #333; }
+  .m.gold { background: #e6b422; }
   .up .m { top: 18%; }
   .hit .m { background: #e0a060; }
   .b { padding: 10px 22px; border-radius: 99px; border: 0; font: inherit; background: #2d3b14; color: #fff; cursor: pointer; }
@@ -20,41 +21,49 @@
   <div id="hud">Score 0 · 30s</div>
   <div id="grid"></div>
   <button class="b" id="go">Start</button>
-  <p>Bop the moles, not the bombs. Keys 1–9 work too.</p>
+  <p>Bop moles (+1), gold moles (+3), not bombs (−5). Hit the target to unlock the next level. Keys 1–9.</p>
 </div>
 <script src="../kit.js"></script>
 <script>
 grid.innerHTML = Array.from({ length: 9 }, (_, i) => `<div class="h" data-i="${i}"><div class="m"></div></div>`).join("");
 const holes = [...grid.children];
-let score, left, running = false, best = 0, tick;
-try { best = +localStorage.getItem("mole-best") || 0; } catch {}
-const hud2 = () => hud.textContent = `Score ${score ?? 0} · ${left ?? 30}s${best ? ` · Best ${best}` : ""}`;
+let score, left, running = false, best = 0, tick, round = 0, level = 1;
+try { best = +localStorage.getItem("mole-best") || 0; level = +localStorage.getItem("mole-level") || 1; } catch {}
+const target = () => 8 + level * 4;
+const hud2 = () => hud.textContent = `Level ${level} · Score ${score ?? 0} / ${target()} · ${left ?? 30}s`;
 hud2();
 
-function pop() {
-  if (!running) return;
-  const free = holes.filter(h => !h.classList.contains("up"));
+function pop(id) {
+  if (!running || id !== round) return; // a stale chain from a previous round stops here
+  const free = holes.filter(h => !h.classList.contains("up")), ramp = (30 - left) + level * 6;
   if (free.length) {
-    const h = free[Math.random() * free.length | 0], bomb = Math.random() < .18;
-    h.firstChild.className = "m" + (bomb ? " bomb" : ""); h.firstChild.textContent = bomb ? "💣" : "•ᴥ•";
-    h.dataset.bomb = bomb ? 1 : ""; h.classList.add("up"); h.classList.remove("hit");
-    setTimeout(() => h.classList.remove("up"), Math.max(450, 1000 - (30 - left) * 18));
+    const h = free[Math.random() * free.length | 0], r = Math.random();
+    const kind = r < .14 + level * .01 ? "bomb" : level > 1 && r > .92 ? "gold" : "mole";
+    h.firstChild.className = "m" + (kind === "mole" ? "" : " " + kind); h.firstChild.textContent = kind === "bomb" ? "💣" : kind === "gold" ? "★ᴥ★" : "•ᴥ•";
+    h.dataset.kind = kind; h.classList.add("up"); h.classList.remove("hit");
+    const tok = h.dataset.tok = Math.random();
+    setTimeout(() => h.dataset.tok == tok && h.classList.remove("up"), Math.max(380, 1000 - ramp * 15) * (kind === "gold" ? .7 : 1));
   }
-  setTimeout(pop, Math.max(280, 750 - (30 - left) * 15) * (.6 + Math.random() * .8));
+  setTimeout(() => pop(id), Math.max(240, 750 - ramp * 12) * (.6 + Math.random() * .8));
 }
 function bop(h) {
   if (!running || !h.classList.contains("up") || h.classList.contains("hit")) return;
   h.classList.add("hit");
-  score += h.dataset.bomb ? -5 : 1; hud2(); kit.sfx(h.dataset.bomb ? "boom" : "pop");
+  const k = h.dataset.kind; score += k === "bomb" ? -5 : k === "gold" ? 3 : 1; hud2();
+  kit.sfx(k === "bomb" ? "boom" : k === "gold" ? "coin" : "pop");
   setTimeout(() => h.classList.remove("up"), 120);
 }
 function end() {
-  running = false; kit.sfx("win"); clearInterval(tick); holes.forEach(h => h.classList.remove("up"));
+  running = false; clearInterval(tick); holes.forEach(h => h.classList.remove("up"));
   if (score > best) { best = score; try { localStorage.setItem("mole-best", best); } catch {} }
-  hud.textContent = `Time! Score ${score}${best ? ` · Best ${best}` : ""}`; go.hidden = false; go.textContent = "Play again";
+  const pass = score >= target();
+  kit.xp(score * 2 + (pass ? level * 10 : 0), pass ? `level ${level} cleared` : `${score} bops`);
+  if (pass) { kit.sfx("win"); hud.textContent = `Level ${level} cleared! Score ${score}`; level++; try { localStorage.setItem("mole-level", level); } catch {} go.textContent = `Level ${level}`; }
+  else { kit.sfx("lose"); hud.textContent = `Needed ${target()}, got ${score}. Best ${best}`; go.textContent = "Try again"; }
+  go.hidden = false;
 }
 go.onclick = () => {
-  score = 0; left = 30; running = true; go.hidden = true; hud2(); pop();
+  score = 0; left = 30; running = true; go.hidden = true; hud2(); pop(++round);
   tick = setInterval(() => { left--; hud2(); if (!left) end(); }, 1000);
 };
 grid.onpointerdown = e => { const h = e.target.closest(".h"); if (h) bop(h); };

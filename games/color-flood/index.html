@@ -5,42 +5,69 @@
 <title>Color Flood</title>
 <style>
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #1b1d24; color: #fff; font: 600 18px system-ui; text-align: center; }
-  #board { display: grid; grid-template-columns: repeat(14, 1fr); width: min(90vw, 420px); aspect-ratio: 1; margin: 14px auto; border-radius: 10px; overflow: hidden; }
+  #levels { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 12px 0 6px; }
+  #levels button { border: 0; border-radius: 10px; padding: 6px 10px; font: 700 13px system-ui; background: #ffffff18; color: #fff; cursor: pointer; min-width: 52px; }
+  #levels button.on { background: #ef476f; }
+  #levels button:disabled { opacity: .35; cursor: default; }
+  #levels small { display: block; color: #ffd166; font-size: 11px; letter-spacing: 1px; min-height: 13px; }
+  #board { display: grid; width: min(90vw, 60vh, 420px); aspect-ratio: 1; margin: 12px auto; border-radius: 10px; overflow: hidden; }
   #board div { transition: background .2s; }
-  #pal { display: flex; gap: 10px; justify-content: center; }
-  #pal button { width: 48px; height: 48px; border-radius: 50%; border: 3px solid #fff3; cursor: pointer; }
+  #pal { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  #pal button { width: 46px; height: 46px; border-radius: 50%; border: 3px solid #fff3; cursor: pointer; }
   .b { margin-top: 14px; padding: 10px 22px; border-radius: 99px; border: 0; font: inherit; background: #fff; cursor: pointer; }
 </style>
 </head>
 <body>
-<!-- skipped: board-size options; 14x14 with 6 colours and 25 moves -->
+<!-- levels grow the board and add colours; stars from moves left; progress in localStorage -->
 <div>
+  <div id="levels"></div>
   <div id="hud">Moves 0 / 25</div>
   <div id="board"></div>
   <div id="pal"></div>
-  <button class="b" onclick="start()">New board</button>
-  <p>Flood the board from the top-left corner. Keys 1–6.</p>
+  <button class="b" id="again">New board</button>
+  <p>Flood the board from the top-left corner. Keys 1–7.</p>
 </div>
+<script src="../kit.js"></script>
 <script>
-const N = 14, MAX = 25, COLS = ["#ef476f", "#ffd166", "#06d6a0", "#118ab2", "#9b5de5", "#f78c6b"];
-let g, moves, over;
-pal.innerHTML = COLS.map((c, i) => `<button style="background:${c}" data-k="${i}" aria-label="colour ${i + 1}"></button>`).join("");
+const COLS = ["#ef476f", "#ffd166", "#06d6a0", "#118ab2", "#9b5de5", "#f78c6b", "#e9ecef"];
+const LEVELS = [[8, 4, 14], [10, 5, 20], [12, 6, 25], [14, 6, 28], [16, 6, 32], [18, 7, 42]]; // [size, colours, moves]
+let stars = []; try { stars = JSON.parse(localStorage.getItem("flood-stars")) || []; } catch {}
+let level = Math.min(stars.length, LEVELS.length - 1), N, K, MAX, g, moves, over;
 const render = () => { board.innerHTML = g.map(k => `<div style="background:${COLS[k]}"></div>`).join(""); };
+function levelsUI() {
+  levels.innerHTML = LEVELS.map((_, i) => `<button data-l="${i}" class="${i === level ? "on" : ""}" ${i > stars.length ? "disabled" : ""}>${i > stars.length ? "🔒" : "Lv " + (i + 1)}<small>${"★".repeat(stars[i] || 0)}</small></button>`).join("");
+}
 function pick(k) {
-  const from = g[0]; if (over || k === from) return;
+  const from = g[0]; if (over || k === from || k >= K) return;
   const stack = [0], seen = new Set([0]);
   while (stack.length) { // flood region connected to corner
     const i = stack.pop(); g[i] = k;
     for (const j of [i - N, i + N, i % N ? i - 1 : -1, i % N < N - 1 ? i + 1 : -1]) if (j >= 0 && j < N * N && !seen.has(j) && g[j] === from) { seen.add(j); stack.push(j); }
   }
-  moves++; render();
-  if (g.every(v => v === k)) { over = true; hud.textContent = `Flooded in ${moves} moves!`; }
-  else if (moves >= MAX) { over = true; hud.textContent = "Out of moves — try again"; }
-  else hud.textContent = `Moves ${moves} / ${MAX}`;
+  moves++; render(); kit.sfx("pop", .8 + k * .08);
+  if (g.every(v => v === k)) {
+    over = true;
+    const left = MAX - moves, s = left >= 4 ? 3 : left >= 2 ? 2 : 1;
+    stars[level] = Math.max(stars[level] || 0, s);
+    try { localStorage.setItem("flood-stars", JSON.stringify(stars)); } catch {}
+    hud.textContent = `Flooded in ${moves} moves! ${"★".repeat(s)}${"☆".repeat(3 - s)}`;
+    kit.sfx("win"); kit.xp(15 + level * 10 + s * 5, `level ${level + 1}`);
+    if (level + 1 < LEVELS.length) setTimeout(() => { level++; start(); }, 1600); else levelsUI();
+  }
+  else if (moves >= MAX) { over = true; hud.textContent = "Out of moves — try again"; kit.sfx("lose"); }
+  else hud.textContent = `Level ${level + 1} · Moves ${moves} / ${MAX}`;
 }
-function start() { g = Array.from({ length: N * N }, () => Math.random() * COLS.length | 0); moves = 0; over = false; hud.textContent = `Moves 0 / ${MAX}`; render(); }
+function start() {
+  [N, K, MAX] = LEVELS[level];
+  board.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+  pal.innerHTML = COLS.slice(0, K).map((c, i) => `<button style="background:${c}" data-k="${i}" aria-label="colour ${i + 1}"></button>`).join("");
+  g = Array.from({ length: N * N }, () => Math.random() * K | 0); moves = 0; over = false;
+  hud.textContent = `Level ${level + 1} · Moves 0 / ${MAX}`; render(); levelsUI();
+}
 pal.onclick = e => { const b = e.target.closest("button"); if (b) pick(+b.dataset.k); };
-addEventListener("keydown", e => { const n = +e.key; if (n >= 1 && n <= 6) pick(n - 1); });
+levels.onclick = e => { const b = e.target.closest("button"); if (b && !b.disabled) { level = +b.dataset.l; start(); } };
+again.onclick = start;
+addEventListener("keydown", e => { const n = +e.key; if (n >= 1 && n <= 7) pick(n - 1); });
 start();
 </script>
 </body>

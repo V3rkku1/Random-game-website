@@ -23,6 +23,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="score"></div><div id="perfect"></div><div id="msg"></div>
+<script src="../kit.js"></script>
 <script>
 // Canvas 2D isometric boxes; no 3D library needed for flat-shaded blocks.
 const ctx = c.getContext("2d"), BASE = 10, BH = 1, store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
@@ -70,7 +71,7 @@ function drop() {
   stack.push(moving); score++; spawn();
 }
 function over() {
-  state = "over"; beep(150, .4, "sawtooth", .1);
+  state = "over"; beep(150, .4, "sawtooth", .1); kit.xp(score * 3, `${score} blocks`);
   const isBest = score > best; if (isBest) { best = score; store("stackBest", best); }
   setTimeout(() => msg.innerHTML = `<h1>${score}</h1><p>${isBest && score ? "New best!" : "Best " + best}</p><p class="cta">Tap or press space to restart</p>`, 700);
 }

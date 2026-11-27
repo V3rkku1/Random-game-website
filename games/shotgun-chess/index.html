@@ -93,6 +93,7 @@
 </form></dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="../kit.js"></script>
 <script>
 // Chess + shotgun: chess.js does the rules; a shot = remove piece and pass the turn via FEN.
 // Skipped: shots inside AI search tree (only considered at root).
@@ -169,6 +170,7 @@ function render() {
   $("squares").innerHTML = html;
 
   const end = result(), turn = game.turn() === "w" ? "White" : "Black";
+  if (end) kit.xp(!ai ? 15 : end === "Checkmate" ? (game.turn() === "b" ? 80 : 10) : 25, "chess", game.fen() + end);
   $("status").textContent = busy ? "Computer is thinking…" : `${turn} to move${game.in_check() ? " · Check!" : ""}`;
   $("status").className = game.in_check() ? "alert" : "";
   $("mode").textContent = ai ? "Vs computer" : "Two players";

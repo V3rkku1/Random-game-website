@@ -53,6 +53,7 @@ summary{cursor:pointer;font-weight:600}
 <!-- skipped: time travel, engine search, promotion picker, piece animation; rules hand-written (no library covers Raumschach), three.js + OrbitControls render -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="../kit.js"></script>
 <script>
 const $ = id => document.getElementById(id), N = 5, at = (x, y, z) => z * 25 + y * 5 + x;
 const V = {p:1,n:3,b:3,u:3,r:5,q:9,k:0};
@@ -222,6 +223,7 @@ function render() {
   if (sel !== null) mark(sel, DISC, 0x0a84ff);
   targets.forEach(m => { mark(m.to, RING, m.cap ? 0xff2d55 : 0x0a84ff); dyn.at(-1).userData.pulse = true; });
   [...tiles, ...dyn, ...levelDeco].forEach(o => o.visible = focus === null || o.userData.z === focus);
+  if (!moves.length) kit.xp(!ai ? 15 : check ? (turn === 'b' ? 100 : 10) : 30, 'raumschach', 'r' + hist.length + turn);
   $('status').textContent = !moves.length ? (check ? `Checkmate · ${turn === 'w' ? 'Black' : 'White'} wins` : 'Stalemate')
     : `${turn === 'w' ? 'White' : 'Black'} to move${check ? ' · Check' : ''}`;
   $('status').className = check ? 'alert' : '';

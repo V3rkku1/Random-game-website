@@ -19,6 +19,7 @@
   <button class="b" onclick="newLevel()">Restart level</button>
   <p>Each click toggles a light and its 4 neighbours. Turn every light off.</p>
 </div>
+<script src="../kit.js"></script>
 <script>
 const N = 5;
 let on, start, level = 1, moves;
@@ -31,7 +32,7 @@ function newLevel(next) {
 grid.onclick = e => {
   const b = e.target.closest("button"); if (!b) return;
   toggle(on, +b.dataset.i); moves++; render();
-  if (!on.some(Boolean)) { hud.textContent = `Level ${level} cleared in ${moves} moves!`; level++; setTimeout(() => newLevel(true), 1000); }
+  if (!on.some(Boolean)) { hud.textContent = `Level ${level} cleared in ${moves} moves!`; kit.sfx("win"); kit.xp(10 + level * 5, `level ${level}`); level++; setTimeout(() => newLevel(true), 1000); }
 };
 newLevel(true);
 </script>

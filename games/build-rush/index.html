@@ -124,6 +124,7 @@
 </div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../kit.js"></script>
 <script>
 // three.js + hand-rolled AABB/slope physics on a 4m build grid. No physics engine: pieces are boxes or analytic slopes.
 const C = 5, V3 = THREE.Vector3, $ = id => document.getElementById(id);
@@ -671,7 +672,7 @@ function drillCheck(p) {
   newDrill();
 }
 function finish(title, value, sub) {
-  running = false; mode = mode + "-done"; document.exitPointerLock?.();
+  running = false; mode = mode + "-done"; document.exitPointerLock?.(); kit.xp(25, title);
   $("doneT").textContent = title; $("doneV").textContent = value; $("doneS").textContent = sub; $("done").hidden = false;
   [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => sfx(f, .2), i * 90));
 }

@@ -35,7 +35,7 @@ function update(dt) {
     const sp = Math.hypot(ball.vx, ball.vy) * 1.01, a = (ball.x - pad.x) / (pad.w / 2) * 1.1; // edge hits angle out
     ball.vx = sp * Math.sin(a); ball.vy = -sp * Math.cos(a); kit.sfx("bounce");
   }
-  if (ball.y > H + 10) { kit.sfx("lose"); if (--lives <= 0) state = "over"; else serve(); }
+  if (ball.y > H + 10) { kit.sfx("lose"); if (--lives <= 0) { state = "over"; kit.xp(score / 25, "game over"); } else serve(); }
   for (const b of bricks) {
     if (ball.x > b.x - 8 && ball.x < b.x + BW + 8 && ball.y > b.y - 8 && ball.y < b.y + BH + 8) {
       bricks.splice(bricks.indexOf(b), 1); score += (ROWS - b.r) * 10; kit.sfx("pop", 1 + (ROWS - b.r) * .12);
@@ -44,7 +44,7 @@ function update(dt) {
       break;
     }
   }
-  if (!bricks.length) { kit.sfx("win"); level++; build(); serve(); }
+  if (!bricks.length) { kit.sfx("win"); kit.xp(40 + level * 10, `level ${level}`); level++; build(); serve(); }
 }
 
 function draw() {

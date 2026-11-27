@@ -54,7 +54,7 @@ function update(dt) {
   for (const o of obs) {
     const ox = o.x + 3, oy = o.y - o.h + 3, ow = o.w - 6, oh = o.h - 6;
     if (h.x < ox + ow && h.x + h.w > ox && h.y < oy + oh && h.y + h.h > oy) {
-      state = "over"; kit.sfx("hit");
+      state = "over"; kit.sfx("hit"); kit.xp(score / 10, `${score | 0} m`);
       if (score > best) { best = score | 0; try { localStorage.setItem("desert-dash-best", best); } catch {} }
     }
   }

@@ -6,51 +6,72 @@
 <style>
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4efe6; color: #3a3226; font: 700 18px system-ui; text-align: center; }
   #board { position: relative; width: min(88vw, 380px); aspect-ratio: 1; margin: 16px auto; background: #d8ccb6; border-radius: 14px; }
-  .t { position: absolute; width: calc(25% - 8px); height: calc(25% - 8px); margin: 4px; border: 0; border-radius: 10px; background: #a5673f; color: #fff; font: 700 min(8vw, 34px) system-ui; cursor: pointer; transition: left .1s, top .1s; }
+  .t { position: absolute; width: calc(var(--w) - 8px); height: calc(var(--w) - 8px); margin: 4px; border: 0; border-radius: 10px; background: #a5673f; color: #fff; font: 700 calc(var(--fs) * 1px) system-ui; cursor: pointer; transition: left .1s, top .1s; }
   .t.ok { background: #5f8a4b; }
+  #levels { display: flex; gap: 6px; justify-content: center; margin-bottom: 8px; }
+  #levels button { border: 0; border-radius: 10px; padding: 6px 12px; font: 700 13px system-ui; background: #3a322618; color: #3a3226; cursor: pointer; }
+  #levels button.on { background: #3a3226; color: #fff; }
+  #levels button:disabled { opacity: .35; cursor: default; }
+  #levels small { display: block; color: #c08a2e; font-size: 11px; min-height: 13px; }
   .b { padding: 10px 22px; border-radius: 99px; border: 0; font: inherit; background: #3a3226; color: #fff; cursor: pointer; }
 </style>
 </head>
 <body>
-<!-- skipped: image tiles and solver hints -->
+<!-- skipped: image tiles and solver hints. Progression: 3x3 -> 4x4 -> 5x5, stars from moves -->
 <div>
+  <div id="levels"></div>
   <div id="hud">Moves 0 · 0:00</div>
   <div id="board"></div>
   <button class="b" onclick="shuffle()">Shuffle</button>
   <p>Click a tile next to the gap, or use the arrow keys.</p>
 </div>
+<script src="../kit.js"></script>
 <script>
-let tiles, moves, t0, timer, done;
-const N = 4;
+const SIZES = [3, 4, 5], PAR = { 3: [40, 80], 4: [150, 300], 5: [350, 700] }; // move limits for 3 and 2 stars
+let stars = []; try { stars = JSON.parse(localStorage.getItem("slide-stars")) || []; } catch {}
+let tiles, moves, t0, timer, done, lvl = Math.min(stars.length, SIZES.length - 1), N, NN;
+function levelsUI() {
+  levels.innerHTML = SIZES.map((n, i) => `<button data-l="${i}" class="${i === lvl ? "on" : ""}" ${i > stars.length ? "disabled" : ""}>${i > stars.length ? "🔒" : n + "×" + n}<small>${"★".repeat(stars[i] || 0)}</small></button>`).join("");
+}
+levels.onclick = e => { const b = e.target.closest("button"); if (b && !b.disabled) { lvl = +b.dataset.l; shuffle(); } };
 function render() {
-  board.innerHTML = tiles.map((v, i) => v ? `<button class="t ${v === i + 1 ? "ok" : ""}" data-i="${i}" style="left:${i % N * 25}%;top:${(i / N | 0) * 25}%">${v}</button>` : "").join("");
+  board.innerHTML = tiles.map((v, i) => v ? `<button class="t ${v === i + 1 ? "ok" : ""}" data-i="${i}" style="left:${i % N * 100 / N}%;top:${(i / N | 0) * 100 / N}%">${v}</button>` : "").join("");
 }
 function move(i) {
   const e = tiles.indexOf(0);
   if (done || !((Math.abs(i - e) === 1 && (i / N | 0) === (e / N | 0)) || Math.abs(i - e) === N)) return;
-  [tiles[i], tiles[e]] = [tiles[e], tiles[i]]; moves++;
+  [tiles[i], tiles[e]] = [tiles[e], tiles[i]]; moves++; kit.sfx("click");
   t0 ??= Date.now(); timer ??= setInterval(hudText, 500);
   render(); hudText();
-  if (tiles.every((v, k) => v === (k + 1) % 16)) { done = true; clearInterval(timer); hud.textContent = `Solved in ${moves} moves · ${clock()}!`; }
+  if (tiles.every((v, k) => v === (k + 1) % NN)) {
+    done = true; clearInterval(timer);
+    const s = moves <= PAR[N][0] ? 3 : moves <= PAR[N][1] ? 2 : 1, unlock = !stars[lvl] && lvl + 1 < SIZES.length;
+    stars[lvl] = Math.max(stars[lvl] || 0, s); try { localStorage.setItem("slide-stars", JSON.stringify(stars)); } catch {}
+    hud.textContent = `Solved in ${moves} moves · ${clock()}! ${"★".repeat(s)}${"☆".repeat(3 - s)}${unlock ? " · next size unlocked" : ""}`;
+    kit.sfx("win"); kit.xp([20, 60, 150][lvl] + s * 10, `${N}×${N}`); levelsUI();
+  }
 }
 const clock = () => { const s = t0 ? (Date.now() - t0) / 1000 | 0 : 0; return `${s / 60 | 0}:${String(s % 60).padStart(2, "0")}`; };
 const hudText = () => { if (!done) hud.textContent = `Moves ${moves} · ${clock()}`; };
 function shuffle() { // random legal moves from solved state keeps it solvable
-  tiles = [...Array(15).keys()].map(k => k + 1).concat(0);
-  let e = 15, prev = -1;
-  for (let k = 0; k < 400; k++) {
-    const opts = [e - N, e + N, e % N ? e - 1 : -1, e % N < N - 1 ? e + 1 : -1].filter(j => j >= 0 && j < 16 && j !== prev);
+  N = SIZES[lvl]; NN = N * N;
+  board.style.setProperty("--w", 100 / N + "%"); board.style.setProperty("--fs", Math.round(130 / N));
+  tiles = [...Array(NN - 1).keys()].map(k => k + 1).concat(0);
+  let e = NN - 1, prev = -1;
+  for (let k = 0; k < NN * 30; k++) {
+    const opts = [e - N, e + N, e % N ? e - 1 : -1, e % N < N - 1 ? e + 1 : -1].filter(j => j >= 0 && j < NN && j !== prev);
     const j = opts[Math.random() * opts.length | 0];
     [tiles[e], tiles[j]] = [tiles[j], tiles[e]]; prev = e; e = j;
   }
-  moves = 0; t0 = undefined; clearInterval(timer); timer = undefined; done = false; render(); hudText();
+  if (tiles.every((v, k) => v === (k + 1) % NN)) return shuffle(); // walk can return to solved on 3x3
+  moves = 0; t0 = undefined; clearInterval(timer); timer = undefined; done = false; render(); hudText(); levelsUI();
 }
 board.onclick = e => { const b = e.target.closest(".t"); if (b) move(+b.dataset.i); };
 addEventListener("keydown", e => {
   const g = tiles.indexOf(0), d = { ArrowUp: N, ArrowDown: -N, ArrowLeft: 1, ArrowRight: -1 }[e.key];
   if (!d) return; e.preventDefault();
   const j = g + d;
-  if (j >= 0 && j < 16 && (Math.abs(d) === N || (j / N | 0) === (g / N | 0))) move(j);
+  if (j >= 0 && j < NN && (Math.abs(d) === N || (j / N | 0) === (g / N | 0))) move(j);
 });
 shuffle();
 </script>

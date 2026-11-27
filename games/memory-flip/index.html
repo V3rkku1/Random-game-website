@@ -6,43 +6,78 @@
 <style>
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(circle, #2a0845, #0b0418); color: #fff; font: 600 18px system-ui; }
   #hud { text-align: center; margin-bottom: 14px; }
-  #board { display: grid; grid-template-columns: repeat(4, min(20vw, 90px)); gap: 12px; perspective: 600px; }
+  #levels { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+  #levels button { border: 0; border-radius: 10px; padding: 6px 10px; font: 700 13px system-ui; background: #ffffff18; color: #fff; cursor: pointer; min-width: 52px; }
+  #levels button.on { background: #e100ff; }
+  #levels button:disabled { opacity: .35; cursor: default; }
+  #levels small { display: block; color: #ffd166; font-size: 11px; letter-spacing: 1px; min-height: 13px; }
+  #board { display: grid; grid-template-columns: repeat(var(--cols), var(--size)); gap: 10px; perspective: 600px; justify-content: center; }
   .c { aspect-ratio: 1; position: relative; transform-style: preserve-3d; transition: transform .4s; cursor: pointer; border: 0; padding: 0; background: none; }
   .c.up { transform: rotateY(180deg); }
-  .c div { position: absolute; inset: 0; border-radius: 12px; display: grid; place-items: center; backface-visibility: hidden; font-size: min(10vw, 44px); }
+  .c div { position: absolute; inset: 0; border-radius: 12px; display: grid; place-items: center; backface-visibility: hidden; font-size: calc(var(--size) * .5); }
   .c .f { background: linear-gradient(135deg, #7f00ff, #e100ff); box-shadow: 0 0 16px #e100ff66; }
   .c .b { background: #1c1030; transform: rotateY(180deg); border: 2px solid #e100ff; }
   .c.done .b { border-color: #00f5a0; box-shadow: 0 0 18px #00f5a0; }
-  button.r { margin-top: 18px; padding: 10px 22px; border-radius: 99px; border: 0; background: #e100ff; color: #fff; font: inherit; cursor: pointer; }
+  #msg { text-align: center; min-height: 26px; margin-top: 14px; color: #ffd166; }
+  button.r { margin-top: 10px; padding: 10px 22px; border-radius: 99px; border: 0; background: #e100ff; color: #fff; font: inherit; cursor: pointer; }
 </style>
 </head>
 <body>
+<!-- levels: bigger boards each step; stars from moves; progress in localStorage -->
 <div>
-  <div id="hud">Moves: <span id="m">0</span> · Pairs: <span id="p">0</span>/8</div>
+  <div id="levels"></div>
+  <div id="hud">Moves: <span id="m">0</span> · Pairs: <span id="p">0</span>/<span id="pt">6</span> · <span id="tm">0</span>s</div>
   <div id="board"></div>
-  <div style="text-align:center"><button class="r" onclick="deal()">New Game</button></div>
+  <div id="msg"></div>
+  <div style="text-align:center"><button class="r" id="again">Restart level</button></div>
 </div>
+<script src="../kit.js"></script>
 <script>
-const icons = ["🚀", "👾", "🍕", "🐙", "⚡", "🎸", "🌈", "💎"];
-let open, moves, pairs, lock;
+const icons = ["🚀", "👾", "🌈", "🍕", "🐙", "⚡", "🎸", "💎", "🦊", "🍩", "🎲", "🌵", "🪐", "🧩", "🐝", "🍉", "🎈", "🦄"];
+const LEVELS = [[4, 3], [4, 4], [5, 4], [6, 5], [6, 6]]; // [cols, rows]
+let stars = []; try { stars = JSON.parse(localStorage.getItem("memory-stars")) || []; } catch {}
+let level = Math.min(stars.length, LEVELS.length - 1), open, moves, pairs, lock, total, t0, timer;
+
+function levelsUI() {
+  levels.innerHTML = LEVELS.map(([c, r], i) => `<button data-l="${i}" class="${i === level ? "on" : ""}" ${i > stars.length ? "disabled" : ""}>${i > stars.length ? "🔒" : "Lv " + (i + 1)}<small>${"★".repeat(stars[i] || 0)}</small></button>`).join("");
+}
 function deal() {
-  open = []; moves = pairs = 0; lock = false; m.textContent = 0; p.textContent = 0;
-  const deck = [...icons, ...icons].sort(() => Math.random() - 0.5);
+  const [cols, rows] = LEVELS[level]; total = cols * rows / 2;
+  open = []; moves = pairs = 0; lock = false; m.textContent = 0; p.textContent = 0; pt.textContent = total; msg.textContent = "";
+  clearInterval(timer); t0 = null; tm.textContent = 0;
+  const size = `min(${Math.floor(86 / cols)}vw, ${Math.floor(62 / rows)}vh, 90px)`;
+  board.style.setProperty("--cols", cols); board.style.setProperty("--size", size);
+  const set = icons.slice(0, total), deck = [...set, ...set];
+  for (let i = deck.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [deck[i], deck[j]] = [deck[j], deck[i]]; } // fair shuffle
   board.innerHTML = deck.map(i => `<button class="c" data-i="${i}" aria-label="card"><div class="f"></div><div class="b">${i}</div></button>`).join("");
+  levelsUI();
+}
+function win() {
+  clearInterval(timer);
+  const s = moves <= total * 1.4 ? 3 : moves <= total * 1.9 ? 2 : 1;
+  const firstClear = !stars[level];
+  stars[level] = Math.max(stars[level] || 0, s);
+  try { localStorage.setItem("memory-stars", JSON.stringify(stars)); } catch {}
+  kit.sfx("win"); kit.xp(total * 4 + s * 10, `${"★".repeat(s)}`);
+  msg.textContent = `${"★".repeat(s)}${"☆".repeat(3 - s)}  ${moves} moves · ${tm.textContent}s` + (firstClear && level + 1 < LEVELS.length ? " · next level unlocked!" : level + 1 === LEVELS.length ? " · all levels done!" : "");
+  if (level + 1 < LEVELS.length) setTimeout(() => { level++; deal(); }, 1800); else levelsUI();
 }
 board.onclick = e => {
   const c = e.target.closest(".c");
   if (!c || lock || c.classList.contains("up")) return;
-  c.classList.add("up"); open.push(c);
+  if (!t0) { t0 = Date.now(); timer = setInterval(() => tm.textContent = (Date.now() - t0) / 1000 | 0, 500); }
+  c.classList.add("up"); open.push(c); kit.sfx("click");
   if (open.length < 2) return;
   m.textContent = ++moves;
   const [a, b] = open; open = [];
   if (a.dataset.i === b.dataset.i) {
-    a.classList.add("done"); b.classList.add("done");
-    if (++pairs === 8) setTimeout(() => alert(`You won in ${moves} moves!`), 400);
-    p.textContent = pairs;
+    a.classList.add("done"); b.classList.add("done"); kit.sfx("coin");
+    p.textContent = ++pairs;
+    if (pairs === total) setTimeout(win, 400);
   } else { lock = true; setTimeout(() => { a.classList.remove("up"); b.classList.remove("up"); lock = false; }, 800); }
 };
+levels.onclick = e => { const b = e.target.closest("button"); if (b && !b.disabled) { level = +b.dataset.l; deal(); } };
+again.onclick = deal;
 deal();
 </script>
 </body>

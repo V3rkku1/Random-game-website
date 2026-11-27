@@ -19,12 +19,13 @@ Optional `best: ["my-game-best", " pts"]` shows the player's record (read from t
 
 ## Shared game kit
 
-`games/kit.js` gives any game synth sound effects, M to mute and P/Esc to pause (auto-pauses when the tab or iframe loses focus):
+`games/kit.js` gives any game synth sound effects, XP toward a site-wide player level, M to mute and P/Esc to pause (auto-pauses when the tab or iframe loses focus). Typing games set `kit.keys = false` so M stays a letter:
 
 ```html
 <script src="../kit.js"></script>
 <script>
   kit.sfx("jump");                         // jump coin shoot hit boom pop bounce click knock win lose
+  kit.xp(25, "level 2");                   // award XP toward the player level shown on the home page
   kit.pausable(() => state === "play");    // when pausing is allowed
   if (!kit.paused) update(dt);             // in the game loop
 </script>

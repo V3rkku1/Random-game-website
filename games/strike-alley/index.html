@@ -250,7 +250,7 @@ const msgEl = document.getElementById("msg"), powerEl = document.getElementById(
 function show(t) { msgEl.textContent = t; msgEl.style.opacity = 1; clearTimeout(show.t); show.t = setTimeout(() => msgEl.style.opacity = 0, 1100); }
 function endGame() {
   phase = "over"; ui();
-  const total = score().at(-1);
+  const total = score().at(-1); kit.xp(total / 2, `${total} pins`);
   const nb = total > best; if (nb) { best = total; try { localStorage.setItem("strike-best", best); } catch {} }
   ovT.textContent = nb ? "New high score!" : "Game over"; ovP.innerHTML = `Final score <b>${total}</b><br>Best ${best}`; go.textContent = "Bowl again"; ov.hidden = false; ui();
 }

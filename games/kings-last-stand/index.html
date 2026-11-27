@@ -33,6 +33,7 @@
 <div id="ov"><div><h1 id="ovT">King's Last Stand</h1><p id="ovP">You are the white king, and you brought a gun.<br>Black pieces move by chess rules. A <b>red square</b> marks where one is about to land — get off it.<br><b>WASD</b> move · <b>Mouse</b> aim · <b>Click</b> shoot</p><span class="go" id="ovB">Click to play</span></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../kit.js"></script>
 <script>
 // Plain Three.js, no physics/engine: pieces snap between squares, raycast hits, minimap on a 2D canvas.
 const S = 4, $ = id => document.getElementById(id);
@@ -96,7 +97,7 @@ function spawn(t, sq) {
   enemies.push(e);
 }
 function nextWave() {
-  wave++; hp = Math.min(3, hp + (wave > 1));
+  wave++; hp = Math.min(3, hp + (wave > 1)); if (wave > 1) kit.xp(10 + wave * 5, `wave ${wave - 1}`);
   const pool = ["p", "p", "p", "n", "b", "r", "q"].slice(0, Math.min(7, 2 + wave)), P = psq();
   for (let i = 0; i < Math.min(12, 2 + wave); i++) {
     let sq, tries = 0;

@@ -323,7 +323,7 @@ function update(dt) {
 }
 function finish() {
   state = "done"; kit.sfx("win");
-  player.place = 1 + finishOrder.length;
+  player.place = 1 + finishOrder.length; kit.xp([120, 70, 45, 25][player.place - 1], `${ord(player.place)} place`);
   const nb = !bestRace || raceT < bestRace; if (nb) { bestRace = raceT; try { localStorage.setItem("drift-race", bestRace.toFixed(2)); } catch {} }
   big.textContent = player.place === 1 ? "WINNER!" : ord(player.place);
   setTimeout(() => {

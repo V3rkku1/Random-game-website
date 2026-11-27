@@ -69,4 +69,12 @@ function renderRecent() {
   $("recent").hidden = !recent.length;
   $("recent-grid").innerHTML = recent.map(card).join("");
 }
-chips(); render(); renderRecent();
+// player level from XP earned in games (same formula as games/kit.js)
+function renderLevel() {
+  const xp = +store.raw("kit-xp") || 0; if (!xp) return;
+  const L = Math.floor((1 + Math.sqrt(1 + xp / 12.5)) / 2), lo = 50 * L * (L - 1), hi = 50 * (L + 1) * L;
+  const top = games.map(g => [g, +store.raw("kit-xp:" + g.id) || 0]).filter(x => x[1]).sort((a, b) => b[1] - a[1])[0];
+  $("lvl").hidden = false;
+  $("lvl").innerHTML = `<b>Level ${L}</b><span class="bar"><i style="width:${(xp - lo) / (hi - lo) * 100}%"></i></span><small>${xp - lo} / ${hi - lo} XP to level ${L + 1}${top ? ` · most XP in ${top[0].title}` : ""}</small>`;
+}
+chips(); render(); renderRecent(); renderLevel();

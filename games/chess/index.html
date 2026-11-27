@@ -87,6 +87,7 @@
 </form></dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="../kit.js"></script>
 <script>
 // chess.js handles all rules (castling, en passant, promotion, draws); this file is UI + a small search AI.
 const game = new Chess(), FILES = "abcdefgh";
@@ -145,6 +146,7 @@ function render() {
   $("moves").scrollTop = 1e9;
 
   if (game.game_over()) {
+    kit.xp(!ai ? 15 : game.in_checkmate() ? (game.turn() === "b" ? 80 : 10) : 25, "chess", game.fen());
     $("endT").textContent = game.in_checkmate() ? `${game.turn() === "w" ? "Black" : "White"} wins` : "Draw";
     $("endS").textContent = game.in_checkmate() ? "Checkmate" : game.in_stalemate() ? "Stalemate" : game.in_threefold_repetition() ? "Threefold repetition" : game.insufficient_material() ? "Insufficient material" : "50-move rule";
   }

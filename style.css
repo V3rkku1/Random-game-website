@@ -76,6 +76,10 @@ main { max-width: 1100px; margin: auto; padding: 0 clamp(16px, 4vw, 32px) 80px; 
 @media (hover: none) { .fav { opacity: 1; } }
 .best { display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 6px; background: var(--border); font-size: 12px; font-weight: 600; }
 #recent { margin-bottom: 40px; }
+.lvl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 28px; max-width: 460px; }
+.lvl .bar { flex: 1; min-width: 140px; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.lvl .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb703, #ff4d6d); }
+.lvl small { width: 100%; color: var(--muted); font-size: 13px; }
 #recent h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 14px; }
 .grid.small { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
 .grid.small .info p, .grid.small .best { display: none; }

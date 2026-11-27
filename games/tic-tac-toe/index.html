@@ -22,6 +22,7 @@
   <button class="r" onclick="start()">New game</button>
   <p id="tally">You 0 · CPU 0 · Draw 0</p>
 </div>
+<script src="../kit.js"></script>
 <script>
 const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 let cells, turn, over; const t = { X: 0, O: 0, D: 0 };
@@ -48,6 +49,7 @@ function play(i) {
   if (w) {
     over = true;
     const who = w === "D" ? "D" : cells[w[0]]; t[who]++;
+    if (mode.value !== "2p") kit.xp(who === "X" ? (mode.value === "hard" ? 40 : 15) : who === "D" ? 10 : 3, who === "X" ? "win" : who === "D" ? "draw" : "");
     msg.textContent = who === "D" ? "Draw" : mode.value === "2p" ? `${who} wins` : who === "X" ? "You win!" : "CPU wins";
     tally.textContent = `${mode.value === "2p" ? "X" : "You"} ${t.X} · ${mode.value === "2p" ? "O" : "CPU"} ${t.O} · Draw ${t.D}`;
     return render(w === "D" ? null : w);

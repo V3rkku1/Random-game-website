@@ -19,6 +19,7 @@
   <button class="b" id="go">Start</button>
   <p id="info">Keys: Q W A S</p>
 </div>
+<script src="../kit.js"></script>
 <script>
 const COLORS = ["#2ecc71", "#e74c3c", "#f1c40f", "#3498db"], FREQ = [330, 262, 392, 494], KEYS = ["KeyQ", "KeyW", "KeyA", "KeyS"];
 pads.innerHTML = COLORS.map((c, i) => `<button class="p" data-i="${i}" style="background:${c};color:${c}" aria-label="pad ${i + 1}"></button>`).join("");
@@ -47,7 +48,7 @@ async function press(i) {
   if (!input) return;
   if (i !== seq[pos]) {
     input = false; flash(i, 600, true);
-    const score = seq.length - 1;
+    const score = seq.length - 1; kit.xp(score * 5, `${score} rounds`);
     if (score > best) { best = score; try { localStorage.setItem("echo-best", best); } catch {} }
     msg.textContent = `Wrong pad! Score ${score}`; info.textContent = `Best ${best} · Keys: Q W A S`; go.hidden = false; go.textContent = "Play again";
     return;

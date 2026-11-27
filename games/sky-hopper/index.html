@@ -134,7 +134,7 @@ function reset() {
 }
 function start() { reset(); state = "play"; ov.hidden = true; }
 function over() {
-  state = "over"; shake = .4; kit.sfx("hit");
+  state = "over"; shake = .4; kit.sfx("hit"); kit.xp((Math.floor(dist) + coins * 10) / 10, "run");
   const score = Math.floor(dist) + coins * 10;
   const nb = score > best; if (nb) { best = score; try { localStorage.setItem("sky-best", best); } catch {} }
   setTimeout(() => { ovT.textContent = nb ? "New best!" : "Crashed!"; ovP.innerHTML = `Score <b>${score}</b> · ${coins} rings · ${Math.floor(dist)} m<br>Best ${best}`; go.textContent = "Again"; ov.hidden = false; }, 700);

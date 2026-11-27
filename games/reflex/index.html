@@ -14,6 +14,7 @@
 <body>
 <!-- skipped: charts and global leaderboard; best and last 5 kept in memory + localStorage -->
 <div id="zone"><div><h1 id="big">Reflex</h1><p id="sub">Tap / click / Space when the screen turns green.</p><p id="hist"></p></div></div>
+<script src="../kit.js"></script>
 <script>
 let state = "idle", timer, t0, times = [], best = 0;
 try { best = +localStorage.getItem("reflex-best") || 0; } catch {}
@@ -25,6 +26,7 @@ function hit() {
   if (state === "go") {
     const ms = Math.round(performance.now() - t0);
     times = [ms, ...times].slice(0, 5);
+    kit.xp(ms < 250 ? 10 : 5, `${ms} ms`);
     if (!best || ms < best) { best = ms; try { localStorage.setItem("reflex-best", ms); } catch {} }
     state = "idle"; show("", `${ms} ms`, ms < 200 ? "Lightning! Click to go again." : ms < 300 ? "Nice. Click to go again." : "Click to go again."); return histText();
   }

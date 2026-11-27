@@ -42,7 +42,9 @@
 <div id="ground"></div>
 <input id="kb" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type here">
 <div id="ov"></div>
+<script src="../kit.js"></script>
 <script>
+kit.keys = false; // every letter is a typing key here
 // DOM words + Web Animations API for bursts; canvas only for the background rain.
 const WORDS = ("rain cloud storm thunder puddle river ocean wave splash drop mist fog breeze wind sky blue grey silver umbrella boots jacket window glass street lamp night city light shadow quiet gentle soft heavy pour drizzle shower flood stream lake pond spring summer autumn winter season weather forecast lightning rainbow sunset sunrise morning evening coffee tea warm blanket book pillow dream sleep wake walk run jump dance music song rhythm beat piano guitar drum melody harmony voice echo whisper shout laugh smile happy calm brave bright clever quick swift sharp smart wise kind friend family garden flower leaf tree forest moss stone rock mountain valley hill meadow field grass seed root branch bark bird feather wing nest egg fox wolf bear deer rabbit otter turtle frog snail moon star planet comet galaxy orbit rocket engine machine robot pixel screen keyboard mouse cable signal network code logic puzzle riddle secret mystery castle tower bridge harbor island desert canyon glacier volcano ember flame spark candle lantern compass map journey travel ticket train station platform window letter stamp parcel paper pencil marker canvas paint color orange purple yellow green crimson velvet marble copper golden crystal diamond pearl shell coral anchor sail captain sailor pirate treasure").split(" ");
 const store = (k, v) => { try { return v === undefined ? localStorage[k] : (localStorage[k] = v); } catch {} };
@@ -113,7 +115,7 @@ function land(w) {
   if (lives <= 0) over();
 }
 function over() {
-  state = "over";
+  state = "over"; kit.xp(Math.min(250, score / 10), "words");
   const mins = (performance.now() - startT) / 60000, wpm = Math.round(typedOk / 5 / Math.max(mins, .01)), acc = Math.round(typedOk / Math.max(1, typedAll) * 100);
   const isBest = score > best; if (isBest) { best = score; store("wordBest", best); }
   words.forEach(w => w.el.remove()); words = []; target = null;
