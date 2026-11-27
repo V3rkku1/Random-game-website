@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desert Dash</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f7f3ea; display: grid; place-items: center; font: 600 16px system-ui, sans-serif; color: #535353; user-select: none; touch-action: manipulation; }
+  canvas { width: min(100vw, 900px); aspect-ratio: 900 / 300; display: block; }
+</style>
+</head>
+<body>
+<!-- skipped: sprites, sound, day/night cycle; everything is drawn with canvas shapes -->
+<canvas id="c" width="900" height="300"></canvas>
+<script>
+const ctx = c.getContext("2d"), W = 900, GROUND = 250, G = 2600, JUMP = -820;
+let best = 0; try { best = +localStorage.getItem("desert-dash-best") || 0; } catch {}
+let p, obs, clouds, speed, score, state = "ready", spawnIn, last = 0, t = 0;
+
+function reset() {
+  p = { x: 80, y: GROUND, vy: 0, duck: false };
+  obs = []; clouds = [{ x: 300, y: 60 }, { x: 700, y: 100 }];
+  speed = 420; score = 0; spawnIn = 1;
+}
+const hitbox = () => p.duck && p.y === GROUND ? { x: p.x - 22, y: p.y - 26, w: 46, h: 26 } : { x: p.x - 16, y: p.y - 44, w: 32, h: 44 };
+
+function jump() {
+  if (state !== "play") { reset(); state = "play"; }
+  else if (p.y === GROUND) p.vy = JUMP;
+}
+function spawn() {
+  const fly = score > 300 && Math.random() < .3;
+  obs.push(fly
+    ? { fly: true, x: W + 20, y: GROUND - [20, 50, 80][Math.random() * 3 | 0], w: 40, h: 22 }
+    : { x: W + 20, y: GROUND, w: 18 + (Math.random() * 3 | 0) * 16, h: 30 + Math.random() * 22 });
+  spawnIn = .6 + Math.random() * 1.1 * (420 / speed) + 180 / speed;
+}
+
+function update(dt) {
+  t += dt;
+  if (state !== "play") return;
+  speed = Math.min(1100, speed + dt * 8);
+  score += dt * speed / 40;
+  p.vy += G * dt * (p.duck && p.y < GROUND ? 2.5 : 1); // duck in air = fast fall
+  p.y = Math.min(GROUND, p.y + p.vy * dt);
+  if (p.y === GROUND) p.vy = 0;
+  if ((spawnIn -= dt) <= 0) spawn();
+  for (const o of obs) o.x -= speed * dt * (o.fly ? 1.1 : 1);
+  obs = obs.filter(o => o.x + o.w > -20);
+  for (const cl of clouds) if ((cl.x -= speed * dt * .15) < -80) { cl.x = W + 40; cl.y = 40 + Math.random() * 80; }
+  const h = hitbox();
+  for (const o of obs) {
+    const ox = o.x + 3, oy = o.y - o.h + 3, ow = o.w - 6, oh = o.h - 6;
+    if (h.x < ox + ow && h.x + h.w > ox && h.y < oy + oh && h.y + h.h > oy) {
+      state = "over";
+      if (score > best) { best = score | 0; try { localStorage.setItem("desert-dash-best", best); } catch {} }
+    }
+  }
+}
+
+function drawPlayer() {
+  const { x, y } = p, ducking = p.duck && y === GROUND, run = state === "play" && y === GROUND;
+  ctx.fillStyle = "#e8833a";
+  ctx.beginPath();
+  if (ducking) ctx.ellipse(x, y - 13, 24, 13, 0, 0, 7);
+  else ctx.ellipse(x, y - 24, 17, 20, 0, 0, 7);
+  ctx.fill();
+  // ears
+  const top = ducking ? y - 24 : y - 42;
+  ctx.beginPath(); ctx.moveTo(x - 10, top + 4); ctx.lineTo(x - 6, top - 10); ctx.lineTo(x - 1, top + 2);
+  ctx.moveTo(x + 3, top + 2); ctx.lineTo(x + 9, top - 10); ctx.lineTo(x + 12, top + 4); ctx.fill();
+  // eye + belly
+  ctx.fillStyle = "#fff6e6"; ctx.beginPath(); ctx.ellipse(x + 2, y - (ducking ? 9 : 16), ducking ? 14 : 10, ducking ? 6 : 10, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = state === "over" ? "#c0392b" : "#333";
+  ctx.beginPath(); ctx.arc(x + (ducking ? 14 : 8), y - (ducking ? 17 : 30), 3, 0, 7); ctx.fill();
+  // feet
+  ctx.fillStyle = "#b85c1e";
+  const f = run ? Math.sin(t * 30) * 5 : 0;
+  ctx.fillRect(x - 10 + f, y - 4, 8, 4); ctx.fillRect(x + 3 - f, y - 4, 8, 4);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, 300);
+  ctx.fillStyle = "#e2dccd";
+  for (const cl of clouds) { ctx.beginPath(); ctx.ellipse(cl.x, cl.y, 34, 10, 0, 0, 7); ctx.ellipse(cl.x + 14, cl.y - 7, 16, 9, 0, 0, 7); ctx.fill(); }
+  ctx.fillStyle = "#535353"; ctx.fillRect(0, GROUND, W, 2);
+  const off = (t * (state === "play" ? speed : 0)) % 60;
+  for (let i = 0; i < 16; i++) ctx.fillRect(i * 60 - off + (i * 37 % 23), GROUND + 8 + (i * 13 % 3) * 5, 4 + i % 3 * 3, 2);
+  for (const o of obs) {
+    if (o.fly) { // bat
+      ctx.fillStyle = "#6b4fa0";
+      const wing = Math.sin(t * 18) * 9;
+      ctx.beginPath(); ctx.ellipse(o.x + 20, o.y - 11, 9, 7, 0, 0, 7);
+      ctx.moveTo(o.x + 14, o.y - 12); ctx.lineTo(o.x, o.y - 12 - wing); ctx.lineTo(o.x + 12, o.y - 6);
+      ctx.moveTo(o.x + 26, o.y - 12); ctx.lineTo(o.x + 40, o.y - 12 - wing); ctx.lineTo(o.x + 28, o.y - 6); ctx.fill();
+    } else { // rocks
+      ctx.fillStyle = "#8a7f6e";
+      ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + o.w * .15, o.y - o.h * .7); ctx.lineTo(o.x + o.w * .45, o.y - o.h);
+      ctx.lineTo(o.x + o.w * .85, o.y - o.h * .8); ctx.lineTo(o.x + o.w, o.y); ctx.fill();
+    }
+  }
+  drawPlayer();
+  ctx.fillStyle = "#535353"; ctx.textAlign = "right"; ctx.font = "600 18px ui-monospace, monospace";
+  ctx.fillText(`HI ${String(best).padStart(5, "0")}  ${String(score | 0).padStart(5, "0")}`, W - 20, 30);
+  ctx.textAlign = "center"; ctx.font = "600 20px system-ui, sans-serif";
+  if (state === "ready") ctx.fillText("Press Space / tap to start · ↓ to duck", W / 2, 130);
+  if (state === "over") ctx.fillText("Game over — Space / tap to retry", W / 2, 130);
+}
+
+function loop(now) {
+  update(Math.min(.05, (now - last) / 1000 || 0)); last = now;
+  draw(); requestAnimationFrame(loop);
+}
+
+addEventListener("keydown", e => {
+  if (["Space", "ArrowUp", "KeyW"].includes(e.code)) { e.preventDefault(); if (!e.repeat) jump(); }
+  if (["ArrowDown", "KeyS"].includes(e.code)) { e.preventDefault(); p.duck = true; }
+});
+addEventListener("keyup", e => { if (["ArrowDown", "KeyS"].includes(e.code)) p.duck = false; });
+// touch: tap top half = jump, hold bottom half = duck
+addEventListener("pointerdown", e => { if (state === "play" && e.clientY > innerHeight / 2) p.duck = true; else jump(); });
+addEventListener("pointerup", () => p.duck = false);
+
+reset(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

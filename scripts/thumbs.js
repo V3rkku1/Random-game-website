@@ -111,6 +111,10 @@ const setup = {
     });
     await p.waitForTimeout(500);
   },
+  "desert-dash": async p => {
+    await p.evaluate(() => { reset(); state = "play"; score = 482; best = 731; p.y = GROUND - 70; p.vy = -100; spawn(); obs[0].x = 160; spawn(); obs[1].x = 520; obs[1].fly = true; obs[1].y = GROUND - 80; obs[1].w = 40; obs[1].h = 22; });
+    await p.waitForTimeout(60);
+  },
 };
 
 (async () => {

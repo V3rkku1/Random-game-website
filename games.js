@@ -18,4 +18,5 @@ window.GAMES = [
   { id: "mine-grid", thumb: "thumbs/mine-grid.jpg", title: "Mine Grid", desc: "Reveal safe cells, flag the mines. Numbers count nearby bombs.", tags: ["puzzle", "classic"], emoji: "💣", colors: ["#5d7ef0"] },
   { id: "fort-frenzy", thumb: "thumbs/fort-frenzy.jpg", title: "Fort Frenzy", desc: "Build a 3D fort, grow gold and food, train troops and raid enemy forts.", tags: ["strategy", "3d", "builder"], emoji: "🏰", colors: ["#ffb340"] },
   { id: "build-rush", thumb: "thumbs/build-rush.jpg", title: "Build Rush", desc: "First-person building and editing. Ramp rush, edit drills, free build.", tags: ["3d", "builder", "action"], emoji: "🧱", colors: ["#ffd166"] },
+  { id: "desert-dash", thumb: "thumbs/desert-dash.jpg", title: "Desert Dash", desc: "Endless runner. Jump rocks, duck bats, go as far as you can.", tags: ["arcade", "one-button"], emoji: "🦊", colors: ["#e8833a"] },
 ];
