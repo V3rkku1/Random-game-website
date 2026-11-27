@@ -35,4 +35,5 @@ window.GAMES = [
   { id: "strike-alley", best: ["strike-best"], thumb: "thumbs/strike-alley.jpg", title: "Strike Alley", desc: "10-frame bowling with real pin physics. Swipe to bowl, curve it for hook.", tags: ["3d", "sports", "physics"], emoji: "🎳", colors: ["#ff4d6d"] },
   { id: "drift-circuit", best: ["drift-race", "s"], thumb: "thumbs/drift-circuit.jpg", title: "Drift Circuit", desc: "3-lap race vs 3 rivals. Drift through corners to charge boost.", tags: ["3d", "racing"], emoji: "🏁", colors: ["#3a86ff"] },
   { id: "ring-flyer", best: ["ring-best", " rings"], thumb: "thumbs/ring-flyer.jpg", title: "Ring Flyer", desc: "Glide over endless 3D mountains. Fly through rings to earn time.", tags: ["3d", "flying", "arcade"], emoji: "🛩️", colors: ["#ffc83d"] },
+  { id: "instrument", title: "Instrument", desc: "Play piano or ocarina with mouse, touch or keyboard. Two octaves, hold to sustain.", tags: ["music", "toy"], emoji: "🎹", colors: ["#7fd3c8"] },
 ];

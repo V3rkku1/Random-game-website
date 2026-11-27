@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instrument</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #14121f; color: #fff; font: 600 16px system-ui; text-align: center; user-select: none; }
+  .modes button { padding: 10px 22px; margin: 0 4px 18px; border-radius: 99px; border: 2px solid #fff; background: none; color: #fff; font: inherit; cursor: pointer; }
+  .modes button[aria-pressed=true] { background: #fff; color: #14121f; }
+  #kb { position: relative; display: flex; height: 200px; touch-action: none; }
+  .k { position: relative; width: min(6vw, 44px); border: 1px solid #222; border-radius: 0 0 6px 6px; background: #f4f4f4; color: #888; display: flex; align-items: end; justify-content: center; padding-bottom: 8px; box-sizing: border-box; font-size: 12px; }
+  .k.b { width: min(3.6vw, 28px); height: 60%; margin: 0 calc(min(3.6vw, 28px) / -2); z-index: 1; background: #222; color: #aaa; }
+  .k.on { background: #ffd54f; }
+  body.oc .k.on { background: #7fd3c8; }
+  p { color: #aaa; font-weight: 400; }
+</style>
+</head>
+<body>
+<!-- skipped: audio samples and kit.js (its M/P hotkeys clash with note keys); all sound is Web Audio synthesis -->
+<div>
+  <div class="modes"><button data-m="piano" aria-pressed="true">🎹 Piano</button><button data-m="ocarina" aria-pressed="false">🪈 Ocarina</button></div>
+  <div id="kb"></div>
+  <p>Click/touch keys or play with the keyboard:<br>Z S X D C V G B H N J M , and Q 2 W 3 E R 5 T 6 Y 7 U I</p>
+</div>
+<script>
+// Notes C3..C5 (25 keys). Tracker-style key map: bottom row = lower octave, top row = upper.
+const KEYS = "KeyZ KeyS KeyX KeyD KeyC KeyV KeyG KeyB KeyH KeyN KeyJ KeyM KeyQ Digit2 KeyW Digit3 KeyE KeyR Digit5 KeyT Digit6 KeyY Digit7 KeyU KeyI".split(" ");
+const codeToNote = Object.fromEntries(KEYS.map((c, i) => [c, i])); codeToNote.Comma = 12; // Comma doubles as C4
+const BLACK = [1, 3, 6, 8, 10];
+kb.innerHTML = Array.from({ length: 25 }, (_, i) => `<div class="k${BLACK.includes(i % 12) ? " b" : ""}" data-n="${i}">${i % 12 ? "" : "C" + (3 + i / 12)}</div>`).join("");
+const els = [...kb.children];
+let ac, mode = "piano";
+const voices = {};
+const freq = n => 130.81 * 2 ** (n / 12);
+
+function audio() {
+  ac ??= new AudioContext();
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+function start(n) {
+  if (voices[n]) return;
+  const a = audio(), t = a.currentTime, g = a.createGain(), nodes = [];
+  g.connect(a.destination);
+  if (mode === "piano") {
+    // A few decaying harmonics approximate a struck string.
+    [[1, .5], [2, .25], [3, .12], [4, .06]].forEach(([h, v]) => {
+      const o = a.createOscillator(), og = a.createGain();
+      o.frequency.value = freq(n) * h;
+      og.gain.setValueAtTime(v, t); og.gain.exponentialRampToValueAtTime(.001, t + 2.5 / h);
+      o.connect(og).connect(g); o.start(t); nodes.push(o);
+    });
+    g.gain.setValueAtTime(.35, t);
+  } else {
+    // Ocarina: pure sine, soft attack, delayed vibrato, a little breath noise.
+    const o = a.createOscillator(), lfo = a.createOscillator(), lg = a.createGain();
+    o.frequency.value = freq(n + 12);
+    lfo.frequency.value = 5.5; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(freq(n + 12) * .008, t + .4);
+    lfo.connect(lg).connect(o.frequency);
+    const nb = a.createBuffer(1, a.sampleRate, a.sampleRate), d = nb.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const ns = a.createBufferSource(), bp = a.createBiquadFilter(), ng = a.createGain();
+    ns.buffer = nb; ns.loop = true; bp.type = "bandpass"; bp.frequency.value = freq(n + 12); bp.Q.value = 2; ng.gain.value = .04;
+    ns.connect(bp).connect(ng).connect(g);
+    o.connect(g); [o, lfo, ns].forEach(x => { x.start(t); nodes.push(x); });
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.3, t + .06);
+  }
+  voices[n] = { g, nodes };
+  els[n].classList.add("on");
+}
+function stop(n) {
+  const v = voices[n]; if (!v) return;
+  const t = ac.currentTime, rel = mode === "piano" ? .3 : .12;
+  v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value, t); v.g.gain.linearRampToValueAtTime(0, t + rel);
+  v.nodes.forEach(o => o.stop(t + rel + .02));
+  delete voices[n]; els[n].classList.remove("on");
+}
+
+addEventListener("keydown", e => { const n = codeToNote[e.code]; if (n != null && !e.repeat && !e.ctrlKey && !e.metaKey) start(n); });
+addEventListener("keyup", e => { const n = codeToNote[e.code]; if (n != null) stop(n); });
+addEventListener("blur", () => Object.keys(voices).forEach(stop));
+
+// Pointer: each pointer holds one note; sliding across keys glides between them.
+const held = {};
+const at = e => document.elementFromPoint(e.clientX, e.clientY)?.closest(".k")?.dataset.n;
+kb.onpointerdown = e => { const n = at(e); if (n != null) { held[e.pointerId] = n; start(+n); } };
+kb.onpointermove = e => {
+  if (!(e.pointerId in held)) return;
+  const n = at(e); if (n === held[e.pointerId]) return;
+  stop(+held[e.pointerId]); held[e.pointerId] = n; if (n != null) start(+n);
+};
+onpointerup = onpointercancel = e => { if (e.pointerId in held) { if (held[e.pointerId] != null) stop(+held[e.pointerId]); delete held[e.pointerId]; } };
+
+document.querySelector(".modes").onclick = e => {
+  const m = e.target.closest("button")?.dataset.m; if (!m) return;
+  Object.keys(voices).forEach(stop); mode = m;
+  document.querySelectorAll(".modes button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === m));
+  document.body.classList.toggle("oc", m === "ocarina");
+};
+</script>
+</body>
+</html>
