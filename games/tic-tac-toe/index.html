@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tic Tac Toe</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #101826; color: #fff; font: 600 18px system-ui; text-align: center; }
+  #board { display: grid; grid-template-columns: repeat(3, min(26vw, 110px)); gap: 8px; margin: 16px auto; }
+  #board button { aspect-ratio: 1; border: 0; border-radius: 14px; background: #1d2a40; color: #fff; font: 700 min(14vw, 60px) system-ui; cursor: pointer; }
+  #board button.win { background: #2f7d5b; }
+  .o { color: #ff8a65; } .x { color: #4fc3f7; }
+  select, .r { padding: 8px 16px; border-radius: 99px; border: 0; font: inherit; background: #2a3a58; color: #fff; }
+  .r { background: #4fc3f7; color: #101826; cursor: pointer; }
+</style>
+</head>
+<body>
+<!-- skipped: online play; minimax is cheap on 3x3 so no pruning -->
+<div>
+  <div id="msg">Your turn (X)</div>
+  <div id="board"></div>
+  <select id="mode"><option value="hard">vs CPU · hard</option><option value="easy">vs CPU · easy</option><option value="2p">2 players</option></select>
+  <button class="r" onclick="start()">New game</button>
+  <p id="tally">You 0 · CPU 0 · Draw 0</p>
+</div>
+<script>
+const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+let cells, turn, over; const t = { X: 0, O: 0, D: 0 };
+const winner = b => { for (const l of LINES) if (b[l[0]] && b[l[0]] === b[l[1]] && b[l[0]] === b[l[2]]) return l; return b.every(Boolean) ? "D" : null; };
+
+function minimax(b, me) { // returns [score, move] from O's view
+  const w = winner(b);
+  if (w) return [w === "D" ? 0 : b[w[0]] === "O" ? 1 : -1];
+  let best = [me === "O" ? -2 : 2];
+  for (let i = 0; i < 9; i++) if (!b[i]) {
+    b[i] = me; const [s] = minimax(b, me === "O" ? "X" : "O"); b[i] = "";
+    if (me === "O" ? s > best[0] : s < best[0]) best = [s, i];
+  }
+  return best;
+}
+
+function render(line) {
+  board.innerHTML = cells.map((v, i) => `<button data-i="${i}" class="${v.toLowerCase()} ${line?.includes(i) ? "win" : ""}" aria-label="cell ${i + 1}">${v}</button>`).join("");
+}
+function play(i) {
+  if (over || cells[i]) return;
+  cells[i] = turn; turn = turn === "X" ? "O" : "X";
+  const w = winner(cells);
+  if (w) {
+    over = true;
+    const who = w === "D" ? "D" : cells[w[0]]; t[who]++;
+    msg.textContent = who === "D" ? "Draw" : mode.value === "2p" ? `${who} wins` : who === "X" ? "You win!" : "CPU wins";
+    tally.textContent = `${mode.value === "2p" ? "X" : "You"} ${t.X} · ${mode.value === "2p" ? "O" : "CPU"} ${t.O} · Draw ${t.D}`;
+    return render(w === "D" ? null : w);
+  }
+  render(); msg.textContent = mode.value === "2p" ? `${turn}'s turn` : turn === "X" ? "Your turn (X)" : "CPU thinking…";
+  if (mode.value !== "2p" && turn === "O") setTimeout(() => {
+    const free = cells.map((v, k) => v ? -1 : k).filter(k => k >= 0);
+    play(mode.value === "easy" && Math.random() < .6 ? free[Math.random() * free.length | 0] : minimax(cells, "O")[1]);
+  }, 350);
+}
+function start() { cells = Array(9).fill(""); turn = "X"; over = false; msg.textContent = mode.value === "2p" ? "X's turn" : "Your turn (X)"; render(); }
+board.onclick = e => { const b = e.target.closest("button"); if (b && (mode.value === "2p" || turn === "X")) play(+b.dataset.i); };
+mode.onchange = start;
+start();
+</script>
+</body>
+</html>

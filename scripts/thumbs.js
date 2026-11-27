@@ -115,6 +115,10 @@ const setup = {
     await p.evaluate(() => { reset(); state = "play"; score = 482; best = 731; p.y = GROUND - 70; p.vy = -100; spawn(); obs[0].x = 160; spawn(); obs[1].x = 520; obs[1].fly = true; obs[1].y = GROUND - 80; obs[1].w = 40; obs[1].h = 22; });
     await p.waitForTimeout(60);
   },
+  "brick-bash": async p => { await p.mouse.click(400, 300); await p.waitForTimeout(1800); },
+  "rock-blaster": async p => { await p.keyboard.press("Enter"); await p.keyboard.down("Space"); await p.keyboard.down("ArrowLeft"); await p.waitForTimeout(1500); },
+  "mole-bop": async p => { await p.click("#go"); await p.evaluate(() => { score = 12; hud2(); [0, 4, 7].forEach(i => holes[i].classList.add("up")); holes[4].firstChild.textContent = "•ᴥ•"; holes[0].firstChild.textContent = "•ᴥ•"; holes[7].firstChild.className = "m bomb"; holes[7].firstChild.textContent = "💣"; running = false; }); await p.waitForTimeout(300); },
+  "echo-pads": async p => { await p.evaluate(() => els[1].classList.add("on")); },
 };
 
 (async () => {

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slide 15</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4efe6; color: #3a3226; font: 700 18px system-ui; text-align: center; }
+  #board { position: relative; width: min(88vw, 380px); aspect-ratio: 1; margin: 16px auto; background: #d8ccb6; border-radius: 14px; }
+  .t { position: absolute; width: calc(25% - 8px); height: calc(25% - 8px); margin: 4px; border: 0; border-radius: 10px; background: #a5673f; color: #fff; font: 700 min(8vw, 34px) system-ui; cursor: pointer; transition: left .1s, top .1s; }
+  .t.ok { background: #5f8a4b; }
+  .b { padding: 10px 22px; border-radius: 99px; border: 0; font: inherit; background: #3a3226; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<!-- skipped: image tiles and solver hints -->
+<div>
+  <div id="hud">Moves 0 · 0:00</div>
+  <div id="board"></div>
+  <button class="b" onclick="shuffle()">Shuffle</button>
+  <p>Click a tile next to the gap, or use the arrow keys.</p>
+</div>
+<script>
+let tiles, moves, t0, timer, done;
+const N = 4;
+function render() {
+  board.innerHTML = tiles.map((v, i) => v ? `<button class="t ${v === i + 1 ? "ok" : ""}" data-i="${i}" style="left:${i % N * 25}%;top:${(i / N | 0) * 25}%">${v}</button>` : "").join("");
+}
+function move(i) {
+  const e = tiles.indexOf(0);
+  if (done || !((Math.abs(i - e) === 1 && (i / N | 0) === (e / N | 0)) || Math.abs(i - e) === N)) return;
+  [tiles[i], tiles[e]] = [tiles[e], tiles[i]]; moves++;
+  t0 ??= Date.now(); timer ??= setInterval(hudText, 500);
+  render(); hudText();
+  if (tiles.every((v, k) => v === (k + 1) % 16)) { done = true; clearInterval(timer); hud.textContent = `Solved in ${moves} moves · ${clock()}!`; }
+}
+const clock = () => { const s = t0 ? (Date.now() - t0) / 1000 | 0 : 0; return `${s / 60 | 0}:${String(s % 60).padStart(2, "0")}`; };
+const hudText = () => { if (!done) hud.textContent = `Moves ${moves} · ${clock()}`; };
+function shuffle() { // random legal moves from solved state keeps it solvable
+  tiles = [...Array(15).keys()].map(k => k + 1).concat(0);
+  let e = 15, prev = -1;
+  for (let k = 0; k < 400; k++) {
+    const opts = [e - N, e + N, e % N ? e - 1 : -1, e % N < N - 1 ? e + 1 : -1].filter(j => j >= 0 && j < 16 && j !== prev);
+    const j = opts[Math.random() * opts.length | 0];
+    [tiles[e], tiles[j]] = [tiles[j], tiles[e]]; prev = e; e = j;
+  }
+  moves = 0; t0 = undefined; clearInterval(timer); timer = undefined; done = false; render(); hudText();
+}
+board.onclick = e => { const b = e.target.closest(".t"); if (b) move(+b.dataset.i); };
+addEventListener("keydown", e => {
+  const g = tiles.indexOf(0), d = { ArrowUp: N, ArrowDown: -N, ArrowLeft: 1, ArrowRight: -1 }[e.key];
+  if (!d) return; e.preventDefault();
+  const j = g + d;
+  if (j >= 0 && j < 16 && (Math.abs(d) === N || (j / N | 0) === (g / N | 0))) move(j);
+});
+shuffle();
+</script>
+</body>
+</html>

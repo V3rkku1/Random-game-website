@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echo Pads</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #14121f; color: #fff; font: 600 18px system-ui; text-align: center; }
+  #pads { display: grid; grid-template-columns: repeat(2, min(36vw, 150px)); gap: 14px; margin: 18px auto; }
+  .p { aspect-ratio: 1; border: 0; border-radius: 24px; cursor: pointer; opacity: .35; transition: opacity .1s, transform .1s; }
+  .p.on { opacity: 1; transform: scale(1.04); box-shadow: 0 0 30px currentColor; }
+  .b { padding: 10px 22px; border-radius: 99px; border: 0; font: inherit; background: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<!-- skipped: audio files; tones come from Web Audio oscillators -->
+<div>
+  <div id="msg">Watch the pads light up, then repeat the pattern.</div>
+  <div id="pads"></div>
+  <button class="b" id="go">Start</button>
+  <p id="info">Keys: Q W A S</p>
+</div>
+<script>
+const COLORS = ["#2ecc71", "#e74c3c", "#f1c40f", "#3498db"], FREQ = [330, 262, 392, 494], KEYS = ["KeyQ", "KeyW", "KeyA", "KeyS"];
+pads.innerHTML = COLORS.map((c, i) => `<button class="p" data-i="${i}" style="background:${c};color:${c}" aria-label="pad ${i + 1}"></button>`).join("");
+const els = [...pads.children];
+let ac, seq = [], pos = 0, input = false, best = 0;
+try { best = +localStorage.getItem("echo-best") || 0; } catch {}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function flash(i, ms = 380, wrong) {
+  ac ??= new AudioContext();
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = wrong ? "sawtooth" : "triangle"; o.frequency.value = wrong ? 110 : FREQ[i];
+  g.gain.setValueAtTime(.25, ac.currentTime); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + ms / 1000);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + ms / 1000);
+  els[i].classList.add("on"); await sleep(ms); els[i].classList.remove("on");
+}
+async function round() {
+  input = false; seq.push(Math.random() * 4 | 0); pos = 0;
+  msg.textContent = `Round ${seq.length}`;
+  await sleep(500);
+  const ms = Math.max(180, 420 - seq.length * 15);
+  for (const i of seq) { await flash(i, ms); await sleep(90); }
+  input = true; msg.textContent = "Your turn";
+}
+async function press(i) {
+  if (!input) return;
+  if (i !== seq[pos]) {
+    input = false; flash(i, 600, true);
+    const score = seq.length - 1;
+    if (score > best) { best = score; try { localStorage.setItem("echo-best", best); } catch {} }
+    msg.textContent = `Wrong pad! Score ${score}`; info.textContent = `Best ${best} · Keys: Q W A S`; go.hidden = false; go.textContent = "Play again";
+    return;
+  }
+  flash(i, 200);
+  if (++pos === seq.length) round();
+}
+go.onclick = () => { seq = []; go.hidden = true; round(); };
+pads.onpointerdown = e => { const p = e.target.closest(".p"); if (p) press(+p.dataset.i); };
+addEventListener("keydown", e => { const i = KEYS.indexOf(e.code); if (i >= 0 && !e.repeat) press(i); });
+if (best) info.textContent = `Best ${best} · Keys: Q W A S`;
+</script>
+</body>
+</html>

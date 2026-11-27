@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Color Flood</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #1b1d24; color: #fff; font: 600 18px system-ui; text-align: center; }
+  #board { display: grid; grid-template-columns: repeat(14, 1fr); width: min(90vw, 420px); aspect-ratio: 1; margin: 14px auto; border-radius: 10px; overflow: hidden; }
+  #board div { transition: background .2s; }
+  #pal { display: flex; gap: 10px; justify-content: center; }
+  #pal button { width: 48px; height: 48px; border-radius: 50%; border: 3px solid #fff3; cursor: pointer; }
+  .b { margin-top: 14px; padding: 10px 22px; border-radius: 99px; border: 0; font: inherit; background: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<!-- skipped: board-size options; 14x14 with 6 colours and 25 moves -->
+<div>
+  <div id="hud">Moves 0 / 25</div>
+  <div id="board"></div>
+  <div id="pal"></div>
+  <button class="b" onclick="start()">New board</button>
+  <p>Flood the board from the top-left corner. Keys 1–6.</p>
+</div>
+<script>
+const N = 14, MAX = 25, COLS = ["#ef476f", "#ffd166", "#06d6a0", "#118ab2", "#9b5de5", "#f78c6b"];
+let g, moves, over;
+pal.innerHTML = COLS.map((c, i) => `<button style="background:${c}" data-k="${i}" aria-label="colour ${i + 1}"></button>`).join("");
+const render = () => { board.innerHTML = g.map(k => `<div style="background:${COLS[k]}"></div>`).join(""); };
+function pick(k) {
+  const from = g[0]; if (over || k === from) return;
+  const stack = [0], seen = new Set([0]);
+  while (stack.length) { // flood region connected to corner
+    const i = stack.pop(); g[i] = k;
+    for (const j of [i - N, i + N, i % N ? i - 1 : -1, i % N < N - 1 ? i + 1 : -1]) if (j >= 0 && j < N * N && !seen.has(j) && g[j] === from) { seen.add(j); stack.push(j); }
+  }
+  moves++; render();
+  if (g.every(v => v === k)) { over = true; hud.textContent = `Flooded in ${moves} moves!`; }
+  else if (moves >= MAX) { over = true; hud.textContent = "Out of moves — try again"; }
+  else hud.textContent = `Moves ${moves} / ${MAX}`;
+}
+function start() { g = Array.from({ length: N * N }, () => Math.random() * COLS.length | 0); moves = 0; over = false; hud.textContent = `Moves 0 / ${MAX}`; render(); }
+pal.onclick = e => { const b = e.target.closest("button"); if (b) pick(+b.dataset.k); };
+addEventListener("keydown", e => { const n = +e.key; if (n >= 1 && n <= 6) pick(n - 1); });
+start();
+</script>
+</body>
+</html>

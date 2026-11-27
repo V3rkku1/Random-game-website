@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reflex</title>
+<style>
+  html, body { margin: 0; height: 100%; font: 600 20px system-ui; color: #fff; user-select: none; }
+  #zone { height: 100%; display: grid; place-items: center; text-align: center; cursor: pointer; background: #2b4c7e; transition: background .1s; }
+  #zone.wait { background: #c0392b; } #zone.go { background: #27ae60; }
+  h1 { font-size: min(12vw, 64px); margin: 0 0 10px; }
+  p { margin: 4px; opacity: .9; }
+</style>
+</head>
+<body>
+<!-- skipped: charts and global leaderboard; best and last 5 kept in memory + localStorage -->
+<div id="zone"><div><h1 id="big">Reflex</h1><p id="sub">Tap / click / Space when the screen turns green.</p><p id="hist"></p></div></div>
+<script>
+let state = "idle", timer, t0, times = [], best = 0;
+try { best = +localStorage.getItem("reflex-best") || 0; } catch {}
+const show = (cls, b, s) => { zone.className = cls; big.textContent = b; sub.textContent = s; };
+const histText = () => hist.textContent = (times.length ? `Last: ${times.join(", ")} ms · avg ${Math.round(times.reduce((a, b) => a + b) / times.length)}` : "") + (best ? ` · best ${best} ms` : "");
+histText();
+function hit() {
+  if (state === "wait") { clearTimeout(timer); state = "idle"; return show("", "Too soon!", "Click to try again."); }
+  if (state === "go") {
+    const ms = Math.round(performance.now() - t0);
+    times = [ms, ...times].slice(0, 5);
+    if (!best || ms < best) { best = ms; try { localStorage.setItem("reflex-best", ms); } catch {} }
+    state = "idle"; show("", `${ms} ms`, ms < 200 ? "Lightning! Click to go again." : ms < 300 ? "Nice. Click to go again." : "Click to go again."); return histText();
+  }
+  state = "wait"; show("wait", "Wait…", "Wait for green.");
+  timer = setTimeout(() => { state = "go"; t0 = performance.now(); show("go", "CLICK!", ""); }, 1200 + Math.random() * 2800);
+}
+zone.addEventListener("pointerdown", hit);
+addEventListener("keydown", e => { if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); if (!e.repeat) hit(); } });
+</script>
+</body>
+</html>

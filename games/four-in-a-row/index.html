@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four in a Row</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f1b2e; color: #fff; font: 600 18px system-ui; text-align: center; }
+  #board { display: grid; grid-template-columns: repeat(7, min(12vw, 64px)); gap: 6px; padding: 10px; margin: 14px auto; background: #2456c8; border-radius: 16px; cursor: pointer; }
+  #board div { aspect-ratio: 1; border-radius: 50%; background: #0f1b2e; transition: background .15s; }
+  #board .r { background: #ff5964; } #board .y { background: #ffd23f; }
+  #board .w { box-shadow: 0 0 0 4px #fff inset; }
+  .b { padding: 8px 18px; border-radius: 99px; border: 0; font: inherit; background: #ffd23f; cursor: pointer; }
+  select { padding: 8px 14px; border-radius: 99px; border: 0; font: inherit; }
+</style>
+</head>
+<body>
+<!-- skipped: transposition tables / bitboards; depth-limited negamax is plenty here -->
+<div>
+  <div id="msg">Your move (red)</div>
+  <div id="board"></div>
+  <select id="mode"><option value="5">vs CPU · hard</option><option value="2">vs CPU · easy</option><option value="0">2 players</option></select>
+  <button class="b" onclick="start()">New game</button>
+</div>
+<script>
+const R = 6, C = 7;
+let g, turn, over, busy;
+const at = (r, c) => r >= 0 && r < R && c >= 0 && c < C ? g[r][c] : 0;
+function line(r, c) { // winning 4 through (r,c) or null
+  const p = g[r][c];
+  for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+    const cells = [[r, c]];
+    for (const s of [1, -1]) for (let k = 1; at(r + dr * k * s, c + dc * k * s) === p; k++) cells.push([r + dr * k * s, c + dc * k * s]);
+    if (cells.length >= 4) return cells;
+  }
+  return null;
+}
+const rowFor = c => { for (let r = R - 1; r >= 0; r--) if (!g[r][c]) return r; return -1; };
+
+function heur(p) { // count open windows for p minus opponent
+  let s = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+    const er = r + dr * 3, ec = c + dc * 3;
+    if (er >= R || ec < 0 || ec >= C) continue;
+    let mine = 0, theirs = 0;
+    for (let k = 0; k < 4; k++) { const v = g[r + dr * k][c + dc * k]; v === p ? mine++ : v ? theirs++ : 0; }
+    if (mine > 0 && !theirs) s += mine ** 3; else if (theirs > 0 && !mine) s -= theirs ** 3;
+  }
+  return s;
+}
+function negamax(p, d, a, b) {
+  const q = p === 1 ? 2 : 1; let best = -1e9, move = 3, any = false;
+  for (const c of [3, 2, 4, 1, 5, 0, 6]) {
+    const r = rowFor(c); if (r < 0) continue; any = true;
+    g[r][c] = p;
+    const s = line(r, c) ? 1e6 + d : d <= 1 ? heur(p) : -negamax(q, d - 1, -b, -a)[0];
+    g[r][c] = 0;
+    if (s > best) { best = s; move = c; }
+    a = Math.max(a, s); if (a >= b) break;
+  }
+  return [any ? best : 0, move];
+}
+
+function render(win) {
+  board.innerHTML = g.flat().map((v, i) => `<div data-c="${i % C}" class="${["", "r", "y"][v]} ${win?.some(([r, c]) => r * C + c === i) ? "w" : ""}"></div>`).join("");
+}
+function drop(c) {
+  const r = rowFor(c); if (over || r < 0) return false;
+  g[r][c] = turn;
+  const w = line(r, c), name = turn === 1 ? "Red" : "Yellow";
+  turn = 3 - turn;
+  if (w || g[0].every(Boolean)) { over = true; msg.textContent = w ? (mode.value === "0" ? `${name} wins` : name === "Red" ? "You win!" : "CPU wins") : "Draw"; render(w); return true; }
+  msg.textContent = mode.value === "0" ? `${turn === 1 ? "Red" : "Yellow"}'s move` : turn === 1 ? "Your move (red)" : "CPU thinking…";
+  render(); return true;
+}
+board.onclick = e => {
+  const c = e.target.dataset.c; if (c === undefined || busy) return;
+  if (!drop(+c) || over || mode.value === "0") return;
+  busy = true;
+  setTimeout(() => { drop(negamax(2, +mode.value, -1e9, 1e9)[1]); busy = false; }, 200);
+};
+function start() { g = Array.from({ length: R }, () => Array(C).fill(0)); turn = 1; over = busy = false; msg.textContent = mode.value === "0" ? "Red's move" : "Your move (red)"; render(); }
+mode.onchange = start;
+start();
+</script>
+</body>
+</html>
