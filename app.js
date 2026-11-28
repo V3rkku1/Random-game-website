@@ -1,5 +1,9 @@
 // No framework: plain DOM is enough for a static game list. Favorites/recents live in localStorage (per browser).
-const games = window.GAMES;
+// ?web = tab of games hosted on other sites (entries with url); default tab = games hosted here
+const WEB = new URLSearchParams(location.search).has("web");
+const games = window.GAMES.filter(g => !g.url === !WEB);
+if (WEB) { document.querySelector(".hero h1").textContent = "Games from around the web."; document.querySelector(".hero p").textContent = "Free games on other sites. Opens in a new tab."; }
+document.querySelector(`nav a[href="${WEB ? "?web" : "./#games"}"]`).setAttribute("aria-current", "page");
 const link = g => g.url || `play.html?g=${encodeURIComponent(g.id)}`;
 const $ = id => document.getElementById(id);
 const store = { // localStorage can throw (private mode, blocked storage): fall back to defaults
@@ -39,7 +43,7 @@ function card(g) {
   // soft tint of the game's first color
   const bg = g.thumb ? `background-image:url('${g.thumb}')` : `background:color-mix(in srgb, ${(g.colors || ["#999"])[0]} 18%, var(--surface))`;
   const fav = favs.has(g.id);
-  return `<a class="card" href="${link(g)}">
+  return `<a class="card" href="${link(g)}"${g.url ? ` target="_blank" rel="noopener"` : ""}>
     <div class="thumb" style="${bg}">${g.thumb ? "" : `<span>${g.emoji || "🎮"}</span>`}
       ${NEW.has(g.id) ? `<em class="badge">New</em>` : ""}
       <button class="fav${fav ? " on" : ""}" data-fav="${g.id}" aria-label="${fav ? "Remove from" : "Add to"} favorites" aria-pressed="${fav}">${fav ? "★" : "☆"}</button>
