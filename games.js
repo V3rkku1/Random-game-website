@@ -36,4 +36,16 @@ window.GAMES = [
   { id: "drift-circuit", best: ["drift-race", "s"], thumb: "thumbs/drift-circuit.jpg", title: "Drift Circuit", desc: "3-lap race vs 3 rivals. Drift through corners to charge boost.", tags: ["3d", "racing"], emoji: "🏁", colors: ["#3a86ff"] },
   { id: "ring-flyer", best: ["ring-best", " rings"], thumb: "thumbs/ring-flyer.jpg", title: "Ring Flyer", desc: "Glide over endless 3D mountains. Fly through rings to earn time.", tags: ["3d", "flying", "arcade"], emoji: "🛩️", colors: ["#ffc83d"] },
   { id: "instrument", title: "Instrument", desc: "Play piano or ocarina with mouse, touch or keyboard. Two octaves, hold to sustain.", tags: ["music", "toy"], emoji: "🎹", colors: ["#7fd3c8"] },
+  // External fan/official/shareware games, link out (sites may block iframes). Sourced via ported2browser.org; skipped ports that bundle commercial game files.
+  { id: "pokerogue", title: "PokéRogue", desc: "Pokémon roguelite fan game. Battle wave after wave, build your team.", tags: ["rpg", "external"], emoji: "🔴", colors: ["#e3350d"], url: "https://pokerogue.net/" },
+  { id: "pokeclicker", title: "PokéClicker", desc: "Pokémon idle clicker fan game. Catch them all, one click at a time.", tags: ["idle", "external"], emoji: "🖱️", colors: ["#3b4cca"], url: "https://www.pokeclicker.com/" },
+  { id: "pokepath-td", title: "PokéPath TD", desc: "Pokémon tower defense fan game.", tags: ["strategy", "external"], emoji: "🗼", colors: ["#ffcb05"], url: "https://khydra98.itch.io/pokepath" },
+  { id: "super-mario-127", title: "Super Mario 127", desc: "Big 2D Mario fan game with Galaxy-style levels.", tags: ["platformer", "external"], emoji: "🍄", colors: ["#e52521"], url: "https://solarshine-studios.itch.io/super-mario-127" },
+  { id: "minecraft-classic", title: "Minecraft Classic", desc: "Mojang's official 2009 Minecraft in the browser.", tags: ["3d", "builder", "external"], emoji: "⛏️", colors: ["#5d9b3a"], url: "https://classic.minecraft.net/" },
+  { id: "doom", title: "Doom", desc: "Classic 1993 shooter, shareware episode.", tags: ["shooter", "classic", "external"], emoji: "👹", colors: ["#8b0000"], url: "https://ozkl.github.io/doomgeneric/" },
+  { id: "quake", title: "Quake", desc: "QuakeWorld deathmatch in the browser.", tags: ["shooter", "3d", "external"], emoji: "🔫", colors: ["#6b4f2a"], url: "https://q1.pieter.com/" },
+  { id: "srb2-kart", title: "SRB2 Kart", desc: "Sonic kart racing fan game.", tags: ["racing", "external"], emoji: "🦔", colors: ["#1e6fd9"], url: "https://skyleite.github.io/Kart-Public-WASM/" },
+  { id: "diablo", title: "Diablo", desc: "1996 dungeon crawler, free shareware part.", tags: ["rpg", "classic", "external"], emoji: "🗡️", colors: ["#7a1010"], url: "https://d07riv.github.io/diabloweb/" },
+  { id: "openttd", title: "Transport Tycoon", desc: "Build a transport empire with trains, trucks and ships.", tags: ["simulation", "external"], emoji: "🚂", colors: ["#2f7d32"], url: "https://epicport.com/en/ttd/" },
+  { id: "2048", title: "2048", desc: "The original sliding number puzzle.", tags: ["puzzle", "external"], emoji: "🔢", colors: ["#edc22e"], url: "https://play2048.co/" },
 ];
